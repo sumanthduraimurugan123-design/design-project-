@@ -178,6 +178,8 @@ export default function Dashboard() {
           selectedCountry={selectedCountry}
           newsCount={news.length}
           alertsCount={alerts.length}
+          news={news}
+          alerts={alerts}
           persona={persona}
         />
 

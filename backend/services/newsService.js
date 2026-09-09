@@ -8,11 +8,32 @@ const xmlParser = new XMLParser({
   attributeNamePrefix: '@_'
 });
 
-// Cache to store freshly aggregated dispatches
+// In-memory cache to store freshly aggregated authentic dispatches
 let memoryNewsCache = [];
 let lastSyncTimestamp = new Date().toISOString();
 
-// Direct authoritative RSS Feeds providing canonical, redirect-free article URLs
+// Human-readable country mapping for localized real-time intelligence queries
+const COUNTRY_NAME_MAP = {
+  'global': 'World Geopolitics',
+  'us': 'United States',
+  'uk': 'United Kingdom',
+  'ukraine': 'Ukraine',
+  'russia': 'Russia',
+  'germany': 'Germany',
+  'china': 'China',
+  'taiwan': 'Taiwan',
+  'india': 'India',
+  'japan': 'Japan',
+  'israel': 'Israel',
+  'france': 'France',
+  'canada': 'Canada',
+  'australia': 'Australia',
+  'iran': 'Iran',
+  'brazil': 'Brazil',
+  'south korea': 'South Korea'
+};
+
+// Direct authoritative publisher RSS feeds
 const FEED_REGISTRY = {
   // Global Headline Streams
   'global': [
@@ -85,14 +106,46 @@ const FEED_REGISTRY = {
 };
 
 /**
+ * Decode HTML entities in text
+ */
+function decodeHtmlEntities(str) {
+  if (!str) return '';
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(code));
+}
+
+/**
+ * Generate real-time Google News RSS search URL for any country or topic
+ */
+function buildGoogleNewsFeedUrl(country, topic) {
+  const countryName = COUNTRY_NAME_MAP[country.toLowerCase()] || country;
+  let query = countryName;
+  if (topic && topic !== 'all') {
+    query += ` ${topic}`;
+  } else {
+    query += ' news';
+  }
+  // Search within last 2 days for freshest dispatches
+  return {
+    url: `https://news.google.com/rss/search?q=${encodeURIComponent(query)}+when:2d&hl=en-US&gl=US&ceid=US:en`,
+    source: 'Google News Live'
+  };
+}
+
+/**
  * Clean URL and remove tracking queries
  */
 function cleanArticleUrl(rawUrl) {
   if (!rawUrl) return '';
   try {
-    // Keep clean base URL without query junk
-    const clean = rawUrl.split('?')[0];
-    return clean;
+    return rawUrl.split('?')[0];
   } catch (e) {
     return rawUrl;
   }
@@ -116,15 +169,16 @@ function isDiscreteHeadlineArticle(url, title) {
   if (u.includes('/live/') || u.includes('/liveblog/') || u.includes('/gallery/') || u.includes('/interactive/')) return false;
   if (t.startsWith('live:') || t.startsWith('live updates:') || t.includes(' - live') || t.includes('rolling coverage')) return false;
 
-  // Must match standard discrete headline article formats:
+  // Discrete headline formats
   const isBbcArticle = u.includes('bbc.co.uk/news/articles/') || u.includes('bbc.com/news/articles/');
   const isNytArticle = u.includes('nytimes.com/') && u.endsWith('.html');
   const isGuardianArticle = u.includes('theguardian.com/') && u.split('/').length >= 6;
   const isAlJazeeraArticle = u.includes('aljazeera.com/news/') || u.includes('aljazeera.com/opinions/') || u.includes('aljazeera.com/features/');
   const isNprArticle = u.includes('npr.org/') && /\/\d{4}\/\d{2}\/\d{2}\//.test(u);
+  const isGoogleNewsArticle = u.includes('news.google.com/rss/articles/') || u.includes('news.google.com/articles/');
   const hasSlug = u.split('/').pop().includes('-');
 
-  return isBbcArticle || isNytArticle || isGuardianArticle || isAlJazeeraArticle || isNprArticle || hasSlug;
+  return isBbcArticle || isNytArticle || isGuardianArticle || isAlJazeeraArticle || isNprArticle || isGoogleNewsArticle || hasSlug;
 }
 
 /**
@@ -164,24 +218,43 @@ async function fetchSingleFeed(feedMeta, country, topic) {
 
       const directUrl = cleanArticleUrl(rawLink);
 
-      // Validate that this is an exact discrete headline article and not a section portal or liveblog
+      // Validate article format
       if (!isDiscreteHeadlineArticle(directUrl, item.title)) continue;
+
+      // Extract and clean title
+      let articleTitle = decodeHtmlEntities(String(item.title).trim());
+      let articleSource = feedMeta.source;
+
+      // For Google News feeds, extract specific source from item.source or title suffix
+      if (item.source) {
+        if (typeof item.source === 'string') {
+          articleSource = decodeHtmlEntities(item.source.trim());
+        } else if (item.source?.['#text']) {
+          articleSource = decodeHtmlEntities(item.source['#text'].trim());
+        }
+      } else if (feedMeta.source.includes('Google News') && articleTitle.includes(' - ')) {
+        const parts = articleTitle.split(' - ');
+        if (parts.length > 1) {
+          articleSource = parts.pop().trim();
+          articleTitle = parts.join(' - ').trim();
+        }
+      }
 
       // Clean HTML tags from description
       let cleanDesc = item.description || '';
-      cleanDesc = cleanDesc.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, ' ').trim();
-      if (!cleanDesc) cleanDesc = item.title;
+      cleanDesc = decodeHtmlEntities(cleanDesc.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, ' ').trim());
+      if (!cleanDesc) cleanDesc = articleTitle;
 
       const pubDate = item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString();
 
       const newsEntity = {
-        title: item.title.trim(),
+        title: articleTitle,
         description: cleanDesc,
         url: directUrl,
         country: country.toLowerCase(),
-        topic: topic === 'all' ? determineTopic(item.title + ' ' + cleanDesc) : topic,
-        source: feedMeta.source,
-        sentiment: analyzeSentiment(item.title + ' ' + cleanDesc),
+        topic: topic === 'all' ? determineTopic(articleTitle + ' ' + cleanDesc) : topic,
+        source: articleSource,
+        sentiment: analyzeSentiment(articleTitle + ' ' + cleanDesc),
         created_at: pubDate
       };
 
@@ -206,20 +279,20 @@ async function fetchSingleFeed(feedMeta, country, topic) {
  */
 function determineTopic(text) {
   const t = text.toLowerCase();
-  if (t.includes('cyber') || t.includes('tech') || t.includes('ai') || t.includes('chip') || t.includes('hacked')) return 'Cyber';
-  if (t.includes('economy') || t.includes('inflation') || t.includes('tariff') || t.includes('trade') || t.includes('market')) return 'Economy';
-  if (t.includes('military') || t.includes('defense') || t.includes('weapon') || t.includes('missile') || t.includes('strike')) return 'Defense';
-  if (t.includes('oil') || t.includes('gas') || t.includes('nuclear') || t.includes('pipeline') || t.includes('energy')) return 'Energy';
+  if (t.includes('cyber') || t.includes('tech') || t.includes('ai') || t.includes('chip') || t.includes('hacked') || t.includes('malware')) return 'Cyber';
+  if (t.includes('economy') || t.includes('inflation') || t.includes('tariff') || t.includes('trade') || t.includes('market') || t.includes('bank') || t.includes('gdp')) return 'Economy';
+  if (t.includes('military') || t.includes('defense') || t.includes('weapon') || t.includes('missile') || t.includes('strike') || t.includes('army') || t.includes('navy')) return 'Defense';
+  if (t.includes('oil') || t.includes('gas') || t.includes('nuclear') || t.includes('pipeline') || t.includes('energy') || t.includes('power grid')) return 'Energy';
   return 'Geopolitics';
 }
 
 /**
- * Basic sentiment analysis helper
+ * Sentiment analysis helper
  */
 function analyzeSentiment(text) {
   const lower = text.toLowerCase();
-  const negativeWords = ['crisis', 'war', 'attack', 'conflict', 'decline', 'drop', 'inflation', 'sanctions', 'casualty', 'disaster', 'threat', 'tensions'];
-  const positiveWords = ['growth', 'peace', 'agreement', 'recovery', 'treaty', 'breakthrough', 'gains', 'alliance', 'stability', 'surplus'];
+  const negativeWords = ['crisis', 'war', 'attack', 'conflict', 'decline', 'drop', 'inflation', 'sanctions', 'casualty', 'disaster', 'threat', 'tensions', 'blast', 'strikes'];
+  const positiveWords = ['growth', 'peace', 'agreement', 'recovery', 'treaty', 'breakthrough', 'gains', 'alliance', 'stability', 'surplus', 'accord'];
 
   let score = 0;
   for (const w of negativeWords) if (lower.includes(w)) score -= 1;
@@ -233,15 +306,19 @@ function analyzeSentiment(text) {
 }
 
 /**
- * Fetch real news from multi-source direct feeds
+ * Fetch real news from multi-source direct feeds with dynamic Google News search augmentation
  */
 export async function fetchLiveNews(country = 'global', topic = 'all') {
   const normalizedCountry = (country || 'global').toLowerCase();
   
-  // Select matching feeds
-  let targetFeeds = FEED_REGISTRY[normalizedCountry] || FEED_REGISTRY['global'];
+  // 1. Start with dedicated authoritative feeds
+  let targetFeeds = [...(FEED_REGISTRY[normalizedCountry] || FEED_REGISTRY['global'])];
 
-  // If topic is Cyber or Economy, add topic-specific feeds
+  // 2. Add Google News Real-time Live Query for this country/topic
+  const googleNewsFeed = buildGoogleNewsFeedUrl(normalizedCountry, topic);
+  targetFeeds.push(googleNewsFeed);
+
+  // 3. If topic is Cyber or Economy, add topic-specific feeds
   const lowerTopic = (topic || '').toLowerCase();
   if (lowerTopic === 'cyber' && FEED_REGISTRY['cyber']) {
     targetFeeds = [...FEED_REGISTRY['cyber'], ...targetFeeds];
@@ -261,12 +338,16 @@ export async function fetchLiveNews(country = 'global', topic = 'all') {
       }
     }
 
-    // Deduplicate by URL
+    // Deduplicate by URL and Title
     const seenUrls = new Set();
+    const seenTitles = new Set();
     const uniqueNews = [];
+
     for (const item of aggregated) {
-      if (!seenUrls.has(item.url)) {
+      const normTitle = item.title.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!seenUrls.has(item.url) && !seenTitles.has(normTitle)) {
         seenUrls.add(item.url);
+        seenTitles.add(normTitle);
         uniqueNews.push(item);
       }
     }
@@ -274,8 +355,7 @@ export async function fetchLiveNews(country = 'global', topic = 'all') {
     // Sort by publication date descending (newest dispatches first)
     uniqueNews.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-    const finalArticles = uniqueNews.slice(0, 30);
-
+    const finalArticles = uniqueNews.slice(0, 35);
     lastSyncTimestamp = new Date().toISOString();
 
     // Persist batch to Supabase if configured
@@ -307,7 +387,7 @@ export async function fetchLiveNews(country = 'global', topic = 'all') {
         memoryNewsCache.unshift(item);
       }
     }
-    if (memoryNewsCache.length > 250) memoryNewsCache = memoryNewsCache.slice(0, 250);
+    if (memoryNewsCache.length > 300) memoryNewsCache = memoryNewsCache.slice(0, 300);
 
     return finalArticles.length > 0 ? finalArticles : memoryNewsCache.slice(0, 25);
   } catch (err) {

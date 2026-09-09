@@ -78,13 +78,14 @@ export async function fetchNewsStream(country = 'global', topic = 'all', forceRe
     while ((match = itemRegex.exec(xml)) !== null && items.length < 25) {
       const itemBlock = match[1];
 
-      // Extract title
-      const titleMatch = itemBlock.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/i) || itemBlock.match(/<title>(.*?)<\/title>/i);
-      const title = titleMatch ? titleMatch[1].trim() : 'Live Global Dispatch';
+      // Clean title and decode HTML entities
+      let title = titleMatch ? titleMatch[1].trim() : '';
+      title = title.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&apos;|&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 
-      // Extract description
+      // Extract and clean description
       const descMatch = itemBlock.match(/<description><!\[CDATA\[(.*?)\]\]><\/description>/i) || itemBlock.match(/<description>(.*?)<\/description>/i);
       let desc = descMatch ? descMatch[1].replace(/<[^>]*>?/gm, '').trim() : title;
+      desc = desc.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&apos;|&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 
       // Extract EXACT article link from <link> or <guid>
       let articleUrl = '';
@@ -96,7 +97,7 @@ export async function fetchNewsStream(country = 'global', topic = 'all', forceRe
       const pubDateMatch = itemBlock.match(/<pubDate>(.*?)<\/pubDate>/i);
       const pubDate = pubDateMatch ? new Date(pubDateMatch[1]).toISOString() : new Date().toISOString();
 
-      if (articleUrl && articleUrl.startsWith('http') && !articleUrl.endsWith('/news') && !articleUrl.endsWith('/world')) {
+      if (title && articleUrl && articleUrl.startsWith('http') && !articleUrl.endsWith('/news') && !articleUrl.endsWith('/world')) {
         items.push({
           id: `wire-${Date.now()}-${items.length}`,
           title,

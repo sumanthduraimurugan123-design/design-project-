@@ -39,14 +39,19 @@ router.get('/', async (req, res) => {
       const { data, error } = await query;
 
       if (!error && data && data.length >= 5) {
-        return res.json({
-          source: 'supabase',
-          count: data.length,
-          country,
-          topic,
-          lastUpdated: getLastSyncTimestamp(),
-          news: data
-        });
+        const newestArticleTime = new Date(data[0].created_at).getTime();
+        const twoHoursAgo = Date.now() - (2 * 60 * 60 * 1000);
+        // Only return from DB if data is fresh (within last 2 hours)
+        if (newestArticleTime > twoHoursAgo) {
+          return res.json({
+            source: 'supabase',
+            count: data.length,
+            country,
+            topic,
+            lastUpdated: getLastSyncTimestamp(),
+            news: data
+          });
+        }
       }
     }
 
