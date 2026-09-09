@@ -1,8 +1,42 @@
-import express from 'express';
-import { fetchLiveNews, getLastSyncTimestamp } from '../services/newsService.js';
+import { fetchLiveNews, fetchWorldwideNewsCategorized, getLastSyncTimestamp, COUNTRY_LEXICON } from '../services/newsService.js';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient.js';
 
 const router = express.Router();
+
+/**
+ * GET /api/news/by-country
+ * Returns dispatches categorized and grouped by sovereign nations
+ */
+router.get('/by-country', async (req, res) => {
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  });
+  try {
+    const data = await fetchWorldwideNewsCategorized();
+    res.json(data);
+  } catch (error) {
+    console.error('❌ [News By-Country Error]:', error);
+    res.status(500).json({ error: 'Failed to retrieve categorized news', details: error.message });
+  }
+});
+
+/**
+ * GET /api/news/countries-list
+ * Returns the lexicon of supported countries with their flags and regions
+ */
+router.get('/countries-list', (req, res) => {
+  res.json({
+    count: COUNTRY_LEXICON.length,
+    countries: COUNTRY_LEXICON.map(c => ({
+      id: c.id,
+      name: c.name,
+      flag: c.flag,
+      region: c.region
+    }))
+  });
+});
 
 /**
  * GET /api/news

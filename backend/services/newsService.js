@@ -1,6 +1,7 @@
 import { XMLParser } from 'fast-xml-parser';
 import { supabase, isSupabaseConfigured } from './supabaseClient.js';
 import { evaluateNewsForAlerts, persistAlert } from './alertEngine.js';
+import { classifyCountry, COUNTRY_LEXICON } from './countryClassifier.js';
 
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
@@ -20,40 +21,60 @@ const COUNTRY_NAME_MAP = {
   'ukraine': 'Ukraine',
   'russia': 'Russia',
   'germany': 'Germany',
+  'france': 'France',
+  'italy': 'Italy',
+  'poland': 'Poland',
   'china': 'China',
   'taiwan': 'Taiwan',
   'india': 'India',
   'japan': 'Japan',
-  'israel': 'Israel',
-  'france': 'France',
-  'canada': 'Canada',
+  'south korea': 'South Korea',
   'australia': 'Australia',
+  'philippines': 'Philippines',
+  'israel': 'Israel',
   'iran': 'Iran',
+  'syria': 'Syria',
+  'saudi arabia': 'Saudi Arabia',
+  'turkey': 'Turkey',
+  'egypt': 'Egypt',
+  'canada': 'Canada',
   'brazil': 'Brazil',
-  'south korea': 'South Korea'
+  'mexico': 'Mexico',
+  'congo': 'DR Congo',
+  'somalia': 'Somalia',
+  'sudan': 'Sudan',
+  'nigeria': 'Nigeria',
+  'south africa': 'South Africa'
 };
 
 // Direct authoritative publisher RSS feeds
 const FEED_REGISTRY = {
-  // Global Headline Streams
+  // Global & Multi-Region Wire Streams
   'global': [
     { url: 'https://feeds.bbci.co.uk/news/world/rss.xml', source: 'BBC News' },
     { url: 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml', source: 'The New York Times' },
     { url: 'https://www.theguardian.com/world/rss', source: 'The Guardian' },
     { url: 'https://www.aljazeera.com/xml/rss/all.xml', source: 'Al Jazeera' }
   ],
-  // United States
+  // Americas
   'us': [
     { url: 'https://rss.nytimes.com/services/xml/rss/nyt/US.xml', source: 'The New York Times' },
     { url: 'https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml', source: 'BBC News' },
     { url: 'https://feeds.npr.org/1004/rss.xml', source: 'NPR News' }
   ],
-  // United Kingdom
+  'canada': [
+    { url: 'https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml', source: 'BBC News' },
+    { url: 'https://rss.nytimes.com/services/xml/rss/nyt/Americas.xml', source: 'The New York Times' }
+  ],
+  'brazil': [
+    { url: 'https://rss.nytimes.com/services/xml/rss/nyt/Americas.xml', source: 'The New York Times' },
+    { url: 'https://www.theguardian.com/world/americas/rss', source: 'The Guardian' }
+  ],
+  // Europe
   'uk': [
     { url: 'https://feeds.bbci.co.uk/news/uk/rss.xml', source: 'BBC News' },
     { url: 'https://www.theguardian.com/uk/rss', source: 'The Guardian' }
   ],
-  // Europe, Ukraine, Russia, Germany
   'ukraine': [
     { url: 'https://feeds.bbci.co.uk/news/world/europe/rss.xml', source: 'BBC News' },
     { url: 'https://www.theguardian.com/world/europe-news/rss', source: 'The Guardian' },
@@ -68,7 +89,11 @@ const FEED_REGISTRY = {
     { url: 'https://feeds.bbci.co.uk/news/world/europe/rss.xml', source: 'BBC News' },
     { url: 'https://rss.nytimes.com/services/xml/rss/nyt/Europe.xml', source: 'The New York Times' }
   ],
-  // Asia, China, Taiwan, India, Japan
+  'france': [
+    { url: 'https://www.france24.com/en/rss', source: 'France 24' },
+    { url: 'https://rss.nytimes.com/services/xml/rss/nyt/Europe.xml', source: 'The New York Times' }
+  ],
+  // Asia-Pacific
   'china': [
     { url: 'https://feeds.bbci.co.uk/news/world/asia/rss.xml', source: 'BBC News' },
     { url: 'https://www.theguardian.com/world/asia/rss', source: 'The Guardian' },
@@ -87,11 +112,30 @@ const FEED_REGISTRY = {
     { url: 'https://feeds.bbci.co.uk/news/world/asia/rss.xml', source: 'BBC News' },
     { url: 'https://rss.nytimes.com/services/xml/rss/nyt/AsiaPacific.xml', source: 'The New York Times' }
   ],
-  // Middle East & Israel
+  'australia': [
+    { url: 'https://www.theguardian.com/australia-news/rss', source: 'The Guardian Australia' },
+    { url: 'https://feeds.bbci.co.uk/news/world/asia/rss.xml', source: 'BBC News' }
+  ],
+  // Middle East
   'israel': [
     { url: 'https://feeds.bbci.co.uk/news/world/middle_east/rss.xml', source: 'BBC News' },
     { url: 'https://www.aljazeera.com/xml/rss/all.xml', source: 'Al Jazeera' },
     { url: 'https://rss.nytimes.com/services/xml/rss/nyt/MiddleEast.xml', source: 'The New York Times' }
+  ],
+  'iran': [
+    { url: 'https://www.aljazeera.com/xml/rss/all.xml', source: 'Al Jazeera' },
+    { url: 'https://feeds.bbci.co.uk/news/world/middle_east/rss.xml', source: 'BBC News' },
+    { url: 'https://rss.nytimes.com/services/xml/rss/nyt/MiddleEast.xml', source: 'The New York Times' }
+  ],
+  'syria': [
+    { url: 'https://www.aljazeera.com/xml/rss/all.xml', source: 'Al Jazeera' },
+    { url: 'https://feeds.bbci.co.uk/news/world/middle_east/rss.xml', source: 'BBC News' }
+  ],
+  // Africa
+  'africa': [
+    { url: 'https://feeds.bbci.co.uk/news/world/africa/rss.xml', source: 'BBC News Africa' },
+    { url: 'https://www.theguardian.com/world/africa/rss', source: 'The Guardian' },
+    { url: 'https://rss.nytimes.com/services/xml/rss/nyt/Africa.xml', source: 'The New York Times' }
   ],
   // Topic-specific streams
   'cyber': [
@@ -132,7 +176,6 @@ function buildGoogleNewsFeedUrl(country, topic) {
   } else {
     query += ' news';
   }
-  // Search within last 2 days for freshest dispatches
   return {
     url: `https://news.google.com/rss/search?q=${encodeURIComponent(query)}+when:2d&hl=en-US&gl=US&ceid=US:en`,
     source: 'Google News Live'
@@ -153,7 +196,6 @@ function cleanArticleUrl(rawUrl) {
 
 /**
  * Validates that a link is a discrete, individual headline news article
- * and NOT a root domain, section portal, or rolling liveblog.
  */
 function isDiscreteHeadlineArticle(url, title) {
   if (!url || typeof url !== 'string') return false;
@@ -176,15 +218,16 @@ function isDiscreteHeadlineArticle(url, title) {
   const isAlJazeeraArticle = u.includes('aljazeera.com/news/') || u.includes('aljazeera.com/opinions/') || u.includes('aljazeera.com/features/');
   const isNprArticle = u.includes('npr.org/') && /\/\d{4}\/\d{2}\/\d{2}\//.test(u);
   const isGoogleNewsArticle = u.includes('news.google.com/rss/articles/') || u.includes('news.google.com/articles/');
+  const isFrance24Article = u.includes('france24.com/en/');
   const hasSlug = u.split('/').pop().includes('-');
 
-  return isBbcArticle || isNytArticle || isGuardianArticle || isAlJazeeraArticle || isNprArticle || isGoogleNewsArticle || hasSlug;
+  return isBbcArticle || isNytArticle || isGuardianArticle || isAlJazeeraArticle || isNprArticle || isGoogleNewsArticle || isFrance24Article || hasSlug;
 }
 
 /**
  * Parse an individual RSS feed URL safely
  */
-async function fetchSingleFeed(feedMeta, country, topic) {
+async function fetchSingleFeed(feedMeta, hintedCountry, topic) {
   try {
     const res = await fetch(feedMeta.url, {
       headers: {
@@ -247,11 +290,17 @@ async function fetchSingleFeed(feedMeta, country, topic) {
 
       const pubDate = item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString();
 
+      // Automatically classify and resolve country from headline and description
+      const classified = classifyCountry(articleTitle, cleanDesc, hintedCountry);
+
       const newsEntity = {
         title: articleTitle,
         description: cleanDesc,
         url: directUrl,
-        country: country.toLowerCase(),
+        country: classified.id,
+        country_name: classified.name,
+        country_flag: classified.flag,
+        region: classified.region,
         topic: topic === 'all' ? determineTopic(articleTitle + ' ' + cleanDesc) : topic,
         source: articleSource,
         sentiment: analyzeSentiment(articleTitle + ' ' + cleanDesc),
@@ -291,7 +340,7 @@ function determineTopic(text) {
  */
 function analyzeSentiment(text) {
   const lower = text.toLowerCase();
-  const negativeWords = ['crisis', 'war', 'attack', 'conflict', 'decline', 'drop', 'inflation', 'sanctions', 'casualty', 'disaster', 'threat', 'tensions', 'blast', 'strikes'];
+  const negativeWords = ['crisis', 'war', 'attack', 'conflict', 'decline', 'drop', 'inflation', 'sanctions', 'casualty', 'disaster', 'threat', 'tensions', 'blast', 'strikes', 'panic'];
   const positiveWords = ['growth', 'peace', 'agreement', 'recovery', 'treaty', 'breakthrough', 'gains', 'alliance', 'stability', 'surplus', 'accord'];
 
   let score = 0;
@@ -355,7 +404,7 @@ export async function fetchLiveNews(country = 'global', topic = 'all') {
     // Sort by publication date descending (newest dispatches first)
     uniqueNews.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-    const finalArticles = uniqueNews.slice(0, 35);
+    const finalArticles = uniqueNews.slice(0, 40);
     lastSyncTimestamp = new Date().toISOString();
 
     // Persist batch to Supabase if configured
@@ -387,18 +436,65 @@ export async function fetchLiveNews(country = 'global', topic = 'all') {
         memoryNewsCache.unshift(item);
       }
     }
-    if (memoryNewsCache.length > 300) memoryNewsCache = memoryNewsCache.slice(0, 300);
+    if (memoryNewsCache.length > 400) memoryNewsCache = memoryNewsCache.slice(0, 400);
 
-    return finalArticles.length > 0 ? finalArticles : memoryNewsCache.slice(0, 25);
+    // If a specific country filter was requested (and not 'global'), return articles for that country
+    if (normalizedCountry !== 'global') {
+      const countryMatched = memoryNewsCache.filter(n => n.country === normalizedCountry);
+      return countryMatched.length > 0 ? countryMatched : finalArticles;
+    }
+
+    return finalArticles.length > 0 ? finalArticles : memoryNewsCache.slice(0, 30);
   } catch (err) {
     console.error(`⚠️ [News Service] Error in live ingestion for ${country}:`, err.message);
     const filtered = memoryNewsCache.filter(n => 
       normalizedCountry === 'global' || n.country === normalizedCountry
     );
-    return filtered.length > 0 ? filtered : memoryNewsCache.slice(0, 20);
+    return filtered.length > 0 ? filtered : memoryNewsCache.slice(0, 25);
   }
+}
+
+/**
+ * Fetch and categorize news from all over the world into country-based collections
+ */
+export async function fetchWorldwideNewsCategorized() {
+  // Ensure we have a rich worldwide cache by ingesting key international sectors
+  if (memoryNewsCache.length < 25) {
+    await fetchLiveNews('global', 'all');
+  }
+
+  // Group all currently aggregated news by country
+  const groups = {};
+  for (const item of memoryNewsCache) {
+    const cId = item.country || 'global';
+    if (!groups[cId]) {
+      const cMeta = COUNTRY_LEXICON.find(c => c.id === cId);
+      groups[cId] = {
+        id: cId,
+        name: cMeta?.name || item.country_name || cId.toUpperCase(),
+        flag: cMeta?.flag || item.country_flag || '🌐',
+        region: cMeta?.region || item.region || 'International',
+        count: 0,
+        articles: []
+      };
+    }
+    groups[cId].count++;
+    groups[cId].articles.push(item);
+  }
+
+  // Sort countries array by article volume descending
+  const countriesArray = Object.values(groups).sort((a, b) => b.count - a.count);
+
+  return {
+    totalArticles: memoryNewsCache.length,
+    countriesCount: countriesArray.length,
+    lastUpdated: lastSyncTimestamp,
+    countries: countriesArray
+  };
 }
 
 export function getLastSyncTimestamp() {
   return lastSyncTimestamp;
 }
+
+export { COUNTRY_LEXICON };

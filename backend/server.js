@@ -53,7 +53,10 @@ function startBackgroundSync() {
     .then(items => console.log(`🚀 [Telemetry Engine] Initial boot ingestion completed: ${items.length} articles`))
     .catch(err => console.error('⚠️ [Telemetry Engine] Initial boot sync warning:', err.message));
 
-  const hotspots = ['global', 'us', 'china', 'ukraine', 'taiwan', 'israel', 'india'];
+  const hotspots = [
+    'global', 'us', 'ukraine', 'russia', 'china', 'israel', 'iran', 
+    'taiwan', 'india', 'germany', 'france', 'australia', 'brazil', 'canada', 'syria'
+  ];
   let hotspotIndex = 0;
 
   syncInterval = setInterval(async () => {
@@ -65,7 +68,7 @@ function startBackgroundSync() {
     } catch (err) {
       console.error('⚠️ [Auto-Sync Error]:', err.message);
     }
-  }, 45000);
+  }, 30000);
 }
 
 // Start Server

@@ -2,18 +2,25 @@ import React, { useEffect, useRef, useState } from 'react';
 import Globe from 'globe.gl';
 import { Crosshair, ZoomIn, ZoomOut, RotateCcw, MapPin } from 'lucide-react';
 
-// Key geopolitical sensor nodes with coordinates and threat metrics
+// Key geopolitical sensor nodes with coordinates and threat metrics across all world regions
 const GLOBAL_HOTSPOTS = [
   { id: 'us', name: 'United States', lat: 38.8951, lng: -77.0364, threat: 'ELEVATED', color: '#00f3ff', size: 1.2 },
   { id: 'uk', name: 'United Kingdom', lat: 51.5074, lng: -0.1278, threat: 'MONITORED', color: '#00ff9d', size: 1.0 },
+  { id: 'france', name: 'France', lat: 48.8566, lng: 2.3522, threat: 'MONITORED', color: '#00f3ff', size: 1.0 },
+  { id: 'germany', name: 'Germany', lat: 52.5200, lng: 13.4050, threat: 'STABLE', color: '#00ff9d', size: 1.0 },
   { id: 'ukraine', name: 'Ukraine', lat: 50.4501, lng: 30.5234, threat: 'CRITICAL', color: '#ff0055', size: 1.6 },
   { id: 'russia', name: 'Russia', lat: 55.7558, lng: 37.6173, threat: 'HIGH', color: '#ff5500', size: 1.5 },
   { id: 'china', name: 'China', lat: 39.9042, lng: 116.4074, threat: 'ELEVATED', color: '#ffb800', size: 1.4 },
   { id: 'taiwan', name: 'Taiwan', lat: 25.0330, lng: 121.5654, threat: 'HIGH', color: '#ff0055', size: 1.4 },
-  { id: 'israel', name: 'Israel', lat: 31.7683, lng: 35.2137, threat: 'CRITICAL', color: '#ff0055', size: 1.5 },
+  { id: 'japan', name: 'Japan', lat: 35.6762, lng: 139.6503, threat: 'MONITORED', color: '#00f3ff', size: 1.1 },
+  { id: 'south korea', name: 'South Korea', lat: 37.5665, lng: 126.9780, threat: 'ELEVATED', color: '#ffb800', size: 1.2 },
   { id: 'india', name: 'India', lat: 28.6139, lng: 77.2090, threat: 'MONITORED', color: '#00f3ff', size: 1.2 },
-  { id: 'germany', name: 'Germany', lat: 52.5200, lng: 13.4050, threat: 'STABLE', color: '#00ff9d', size: 1.0 },
-  { id: 'japan', name: 'Japan', lat: 35.6762, lng: 139.6503, threat: 'MONITORED', color: '#00f3ff', size: 1.1 }
+  { id: 'australia', name: 'Australia', lat: -35.2809, lng: 149.1300, threat: 'MONITORED', color: '#00ff9d', size: 1.1 },
+  { id: 'israel', name: 'Israel', lat: 31.7683, lng: 35.2137, threat: 'CRITICAL', color: '#ff0055', size: 1.5 },
+  { id: 'iran', name: 'Iran', lat: 35.6892, lng: 51.3890, threat: 'HIGH', color: '#ff5500', size: 1.4 },
+  { id: 'syria', name: 'Syria', lat: 33.5138, lng: 36.2765, threat: 'HIGH', color: '#ff0055', size: 1.3 },
+  { id: 'canada', name: 'Canada', lat: 45.4215, lng: -75.6972, threat: 'STABLE', color: '#00ff9d', size: 1.0 },
+  { id: 'brazil', name: 'Brazil', lat: -15.7975, lng: -47.8919, threat: 'STABLE', color: '#00ff9d', size: 1.1 }
 ];
 
 // Telemetry signal arcs connecting planetary intel hubs
@@ -23,7 +30,10 @@ const TELEMETRY_ARCS = [
   { startLat: 38.8951, startLng: -77.0364, endLat: 25.0330, endLng: 121.5654, color: ['#00f3ff', '#ffb800'] },
   { startLat: 39.9042, startLng: 116.4074, endLat: 55.7558, endLng: 37.6173, color: ['#ffb800', '#ff5500'] },
   { startLat: 31.7683, startLng: 35.2137, endLat: 50.4501, endLng: 30.5234, color: ['#ff0055', '#ff0055'] },
-  { startLat: 28.6139, startLng: 77.2090, endLat: 35.6762, endLng: 139.6503, color: ['#00f3ff', '#00f3ff'] }
+  { startLat: 28.6139, startLng: 77.2090, endLat: 35.6762, endLng: 139.6503, color: ['#00f3ff', '#00f3ff'] },
+  { startLat: 35.6892, startLng: 51.3890, endLat: 31.7683, endLng: 35.2137, color: ['#ff5500', '#ff0055'] },
+  { startLat: -35.2809, startLng: 149.1300, endLat: 38.8951, endLng: -77.0364, color: ['#00ff9d', '#00f3ff'] },
+  { startLat: -15.7975, startLng: -47.8919, endLat: 38.8951, endLng: -77.0364, color: ['#00ff9d', '#00f3ff'] }
 ];
 
 export default function Globe3D({ selectedCountry, onSelectCountry }) {
