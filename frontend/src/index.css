@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-base: #040711;
+    --text-scale: 1rem;
+    --accent-glow: #00f3ff;
+  }
+
+  /* Accessibility: Large text mode */
+  body.large-text-mode {
+    font-size: 1.2rem;
+  }
+
+  body.large-text-mode h1 {
+    font-size: 2.25rem !important;
+  }
+
+  body.large-text-mode h2 {
+    font-size: 1.75rem !important;
+  }
+
+  body.large-text-mode p,
+  body.large-text-mode span,
+  body.large-text-mode button {
+    font-size: 1.15rem !important;
+  }
+
+  /* Accessibility: High contrast mode */
+  body.high-contrast-mode {
+    background-color: #000000 !important;
+    color: #ffffff !important;
+  }
+
+  body.high-contrast-mode .cyber-card {
+    background: #000000 !important;
+    border: 2px solid #ffff00 !important;
+    box-shadow: 0 0 10px #ffff00 !important;
+  }
+
+  body.high-contrast-mode .text-slate-400,
+  body.high-contrast-mode .text-slate-300 {
+    color: #ffffff !important;
+  }
+
+  body.high-contrast-mode a,
+  body.high-contrast-mode button {
+    outline: 2px solid #00ffff !important;
+  }
+}
+
+/* Custom cyber scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #070c1e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1b2a59;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #00f3ff;
+}
+
+/* Glassmorphic Cyber Panels */
+.cyber-panel {
+  background: linear-gradient(135deg, rgba(11, 19, 46, 0.75) 0%, rgba(7, 12, 30, 0.85) 100%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(27, 42, 89, 0.8);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6);
+}
+
+.cyber-panel-glow {
+  border-color: rgba(0, 243, 255, 0.4);
+  box-shadow: 0 0 25px -5px rgba(0, 243, 255, 0.2);
+}
+
+.cyber-panel-danger {
+  border-color: rgba(255, 0, 85, 0.5);
+  box-shadow: 0 0 25px -5px rgba(255, 0, 85, 0.25);
+}
+
+/* Subtle holographic grid background */
+.cyber-grid-bg {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(27, 42, 89, 0.15) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(27, 42, 89, 0.15) 1px, transparent 1px);
+}
