@@ -1,3 +1,4 @@
+import express from 'express';
 import { fetchLiveNews, fetchWorldwideNewsCategorized, getLastSyncTimestamp, COUNTRY_LEXICON } from '../services/newsService.js';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient.js';
 
