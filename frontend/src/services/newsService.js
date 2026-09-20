@@ -6,14 +6,20 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api
  * Fetch real news stream directly from Express backend (which aggregates verified deep-links)
  * with multi-tier failovers to Supabase or direct RSS stream.
  */
-export async function fetchNewsStream(country = 'global', topic = 'all', forceRefresh = false) {
+/**
+ * Fetch real news stream directly from Express backend (which aggregates verified deep-links)
+ * with multi-tier failovers to Supabase or direct RSS stream.
+ */
+export async function fetchNewsStream(country = 'global', topic = 'all', forceRefresh = false, location = null, language = 'en') {
   const timestamp = Date.now();
+  const locParam = location ? `&location=${encodeURIComponent(location)}` : '';
+  const langParam = language ? `&language=${encodeURIComponent(language)}` : '';
 
   // 1. Primary: Direct Backend API on localhost:5000
   const candidateUrls = [
-    `${API_BASE}/news?country=${encodeURIComponent(country)}&topic=${encodeURIComponent(topic)}&refresh=${forceRefresh}&_t=${timestamp}`,
-    `http://localhost:5000/api/news?country=${encodeURIComponent(country)}&topic=${encodeURIComponent(topic)}&refresh=${forceRefresh}&_t=${timestamp}`,
-    `/api/news?country=${encodeURIComponent(country)}&topic=${encodeURIComponent(topic)}&refresh=${forceRefresh}&_t=${timestamp}`
+    `${API_BASE}/news?country=${encodeURIComponent(country)}&topic=${encodeURIComponent(topic)}&refresh=${forceRefresh}${locParam}${langParam}&_t=${timestamp}`,
+    `http://localhost:5000/api/news?country=${encodeURIComponent(country)}&topic=${encodeURIComponent(topic)}&refresh=${forceRefresh}${locParam}${langParam}&_t=${timestamp}`,
+    `/api/news?country=${encodeURIComponent(country)}&topic=${encodeURIComponent(topic)}&refresh=${forceRefresh}${locParam}${langParam}&_t=${timestamp}`
   ];
 
   for (const endpoint of candidateUrls) {
@@ -78,7 +84,8 @@ export async function fetchNewsStream(country = 'global', topic = 'all', forceRe
     while ((match = itemRegex.exec(xml)) !== null && items.length < 25) {
       const itemBlock = match[1];
 
-      // Clean title and decode HTML entities
+      // Declare titleMatch and decode HTML entities
+      const titleMatch = itemBlock.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/i) || itemBlock.match(/<title>(.*?)<\/title>/i);
       let title = titleMatch ? titleMatch[1].trim() : '';
       title = title.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&apos;|&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 
@@ -120,6 +127,48 @@ export async function fetchNewsStream(country = 'global', topic = 'all', forceRe
   }
 
   return [];
+}
+
+/**
+ * Fetch smart plain-language news explanation and everyday impact
+ */
+export async function fetchNewsExplanation(title, description, language = 'en') {
+  const endpoints = [
+    `${API_BASE}/news/explain`,
+    'http://localhost:5000/api/news/explain',
+    '/api/news/explain'
+  ];
+
+  for (const ep of endpoints) {
+    try {
+      const res = await fetch(ep, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, description, language })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return data;
+      }
+    } catch (e) {
+      // try next
+    }
+  }
+
+  // Fallback client-side explanation
+  return {
+    success: true,
+    title,
+    category: 'general',
+    explanation: language === 'ta' 
+      ? 'இது ஒரு முக்கியமான நடப்பு செய்தி.' 
+      : (language === 'hi' ? 'यह एक महत्वपूर्ण समाचार है।' : 'This is a notable news update.'),
+    impact: language === 'ta'
+      ? 'தகவல்களைத் தெரிந்து கொண்டு விழிப்புடன் இருக்கவும்.'
+      : (language === 'hi' ? 'घटनाक्रम से अवगत रहें और जागरूक रहें।' : 'Stay informed of regional developments.'),
+    simpleText: `${title}. ${description || ''}`,
+    language
+  };
 }
 
 /**

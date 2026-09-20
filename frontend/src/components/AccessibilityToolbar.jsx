@@ -1,6 +1,5 @@
 import React from 'react';
-import { Volume2, VolumeX, Eye, Type, Smile, Sparkles } from 'lucide-react';
-import { stopSpeech } from '../services/newsService';
+import { Volume2, VolumeX, Eye, Type, Smile, Mic, Radio, Bell, BellOff, Sparkles } from 'lucide-react';
 
 export default function AccessibilityToolbar({
   isHighContrast,
@@ -10,79 +9,109 @@ export default function AccessibilityToolbar({
   isCognitiveSimple,
   onToggleCognitiveSimple,
   onTriggerVoiceSummary,
-  isSpeaking
+  isSpeaking,
+  onOpenVoiceModal,
+  onStartRadio,
+  isRadioPlaying,
+  isAudioAlertsEnabled,
+  onToggleAudioAlerts,
+  onToggleEasyMode,
+  isEasyMode,
+  currentLanguage = 'en'
 }) {
-  return (
-    <div className="w-full bg-cyber-900/90 border-b border-cyber-border/80 px-4 py-2 text-xs font-mono">
-      <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-        
-        {/* Left: Accessibility label */}
-        <div className="flex items-center space-x-2 text-slate-300">
-          <span className="text-sm">♿</span>
-          <span className="font-bold text-white tracking-wide">ACCESSIBILITY MATRIX:</span>
-          <span className="text-[11px] text-slate-400 hidden sm:inline">Inclusive assistive telemetry controls</span>
-        </div>
+  const btnBase = "flex items-center gap-1.5 px-2.5 py-1.5 font-mono text-[10px] border transition-colors rounded-sm";
+  const btnOff = "text-wire-subtle border-wire-border hover:text-wire-fg hover:border-wire-muted bg-wire-surface";
+  const btnOn = "text-wire-base bg-wire-amber border-wire-amber font-medium";
 
-        {/* Right: Assistive Action Toggles */}
+  return (
+    <div className="w-full bg-wire-raised border-b border-wire-border/60 px-4 py-1.5">
+      <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+        
+        {/* Left: Voice First & Accessibility Tools */}
         <div className="flex flex-wrap items-center gap-2">
-          
-          {/* Voice Summary Button */}
+          <span className="font-mono text-[10px] text-wire-muted mr-1 hidden sm:inline">Voice & A11y:</span>
+
+          {/* Voice Assistant Trigger */}
+          <button
+            onClick={onOpenVoiceModal}
+            className={`${btnBase} bg-wire-amber text-wire-base border-wire-amber font-bold shadow-sm hover:bg-wire-amber/90`}
+            title="Speak voice command (Speech-to-text)"
+          >
+            <Mic className="w-3 h-3 animate-pulse" />
+            <span>Voice Access</span>
+          </button>
+
+          {/* Radio Auto-Play Mode */}
+          <button
+            onClick={onStartRadio}
+            className={`${btnBase} ${isRadioPlaying ? 'bg-wire-green text-wire-base border-wire-green font-semibold' : btnOff}`}
+            title="Auto-play all news like radio"
+          >
+            <Radio className="w-3 h-3" />
+            <span>{isRadioPlaying ? 'Radio Playing' : 'Continuous Radio'}</span>
+          </button>
+
+          {/* Live Audio Alerts Toggle */}
+          <button
+            onClick={onToggleAudioAlerts}
+            className={`${btnBase} ${isAudioAlertsEnabled ? 'bg-wire-amber text-wire-base border-wire-amber font-semibold' : btnOff}`}
+            title="Enable/disable unauthenticated spoken threat warnings"
+          >
+            {isAudioAlertsEnabled ? <Bell className="w-3 h-3" /> : <BellOff className="w-3 h-3" />}
+            <span>{isAudioAlertsEnabled ? 'Audio Alerts: ON' : 'Audio Alerts: OFF'}</span>
+          </button>
+
+          {/* Easy Mode Toggle */}
+          <button
+            onClick={() => onToggleEasyMode(!isEasyMode)}
+            className={`${btnBase} ${isEasyMode ? 'bg-yellow-400 text-black border-yellow-400 font-bold' : btnOff}`}
+            title="Switch to simplified oversized high-contrast Easy Mode"
+          >
+            <span>🎛️</span>
+            <span>{isEasyMode ? 'Exit Easy' : 'Easy Mode (Simple UI)'}</span>
+          </button>
+
+          {/* Voice Summary */}
           <button
             onClick={onTriggerVoiceSummary}
-            className={`flex items-center space-x-1.5 px-2.5 py-1 rounded font-semibold transition-all ${
-              isSpeaking
-                ? 'bg-cyber-crimson text-white animate-pulse shadow-glow-crimson'
-                : 'bg-purple-900/50 hover:bg-purple-800/60 text-purple-200 border border-purple-500/40'
-            }`}
-            title="Read whole intelligence summary aloud"
+            className={`${btnBase} ${isSpeaking ? btnOn : btnOff}`}
+            title="Read sector intelligence briefing aloud"
           >
-            {isSpeaking ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
-            <span>{isSpeaking ? 'STOP AUDIO' : 'VOICE SUMMARY'}</span>
+            {isSpeaking ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+            <span>{isSpeaking ? 'Stop briefing' : 'Sector briefing'}</span>
           </button>
+        </div>
 
-          {/* High Contrast Mode */}
+        {/* Right: Visual toggles */}
+        <div className="hidden lg:flex items-center gap-1.5">
           <button
             onClick={onToggleHighContrast}
-            className={`flex items-center space-x-1.5 px-2.5 py-1 rounded border transition-all ${
-              isHighContrast
-                ? 'bg-yellow-400 text-black border-yellow-300 font-bold'
-                : 'bg-cyber-950 text-slate-300 border-cyber-border hover:border-slate-400'
-            }`}
-            title="Toggle High Contrast Theme (Yellow & High-Def on Black)"
+            className={`${btnBase} ${isHighContrast ? btnOn : btnOff}`}
+            title="High contrast mode (WCAG AAA)"
           >
-            <Eye className="w-3.5 h-3.5" />
-            <span>HIGH CONTRAST</span>
+            <Eye className="w-3 h-3" />
+            <span>High contrast</span>
           </button>
 
-          {/* Large Text Mode */}
           <button
             onClick={onToggleLargeText}
-            className={`flex items-center space-x-1.5 px-2.5 py-1 rounded border transition-all ${
-              isLargeText
-                ? 'bg-cyber-cyan text-black border-cyan-300 font-bold shadow-glow-cyan'
-                : 'bg-cyber-950 text-slate-300 border-cyber-border hover:border-slate-400'
-            }`}
-            title="Increase font sizing across interface"
+            className={`${btnBase} ${isLargeText ? btnOn : btnOff}`}
+            title="Large text typography"
           >
-            <Type className="w-3.5 h-3.5" />
-            <span>LARGE TEXT</span>
+            <Type className="w-3 h-3" />
+            <span>Large text</span>
           </button>
 
-          {/* Simplified Cognitive / Illiterate UI */}
           <button
             onClick={onToggleCognitiveSimple}
-            className={`flex items-center space-x-1.5 px-2.5 py-1 rounded border transition-all ${
-              isCognitiveSimple
-                ? 'bg-cyber-emerald text-black border-emerald-300 font-bold shadow-glow-emerald'
-                : 'bg-cyber-950 text-slate-300 border-cyber-border hover:border-slate-400'
-            }`}
-            title="Toggle Simplified Icon UI for intuitive cognitive comprehension"
+            className={`${btnBase} ${isCognitiveSimple ? btnOn : btnOff}`}
+            title="Simplified reading layout"
           >
-            <Smile className="w-3.5 h-3.5" />
-            <span>SIMPLIFIED UI</span>
+            <Smile className="w-3 h-3" />
+            <span>Simplified</span>
           </button>
-
         </div>
+
       </div>
     </div>
   );

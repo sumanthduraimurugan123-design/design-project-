@@ -122,7 +122,7 @@ export const COUNTRY_LEXICON = [
     name: 'India',
     flag: '🇮🇳',
     region: 'Asia-Pacific',
-    keywords: ['india', 'indian', 'new delhi', 'delhi', 'modi', 'bjp', 'mumbai', 'kashmir', 'ladakh', 'rupee']
+    keywords: ['india', 'indian', 'new delhi', 'delhi', 'chennai', 'tamil nadu', 'mumbai', 'bengaluru', 'bangalore', 'hyderabad', 'kolkata', 'modi', 'bjp', 'kashmir', 'ladakh', 'rupee', 'kerala', 'punjab']
   },
   {
     id: 'japan',

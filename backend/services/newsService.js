@@ -27,6 +27,10 @@ const COUNTRY_NAME_MAP = {
   'china': 'China',
   'taiwan': 'Taiwan',
   'india': 'India',
+  'chennai': 'Chennai',
+  'delhi': 'New Delhi',
+  'mumbai': 'Mumbai',
+  'bengaluru': 'Bengaluru',
   'japan': 'Japan',
   'south korea': 'South Korea',
   'australia': 'Australia',
@@ -166,19 +170,55 @@ function decodeHtmlEntities(str) {
 }
 
 /**
- * Generate real-time Google News RSS search URL for any country or topic
+ * Generate real-time Google News RSS search URL for any country, topic, city, or language
  */
-function buildGoogleNewsFeedUrl(country, topic) {
-  const countryName = COUNTRY_NAME_MAP[country.toLowerCase()] || country;
-  let query = countryName;
-  if (topic && topic !== 'all') {
-    query += ` ${topic}`;
+function buildGoogleNewsFeedUrl(country, topic, location = null, language = 'en') {
+  let query = '';
+  if (location) {
+    query = `${location} news`;
   } else {
-    query += ' news';
+    const countryName = COUNTRY_NAME_MAP[country.toLowerCase()] || country;
+    query = countryName;
+    if (topic && topic !== 'all') {
+      query += ` ${topic}`;
+    } else {
+      query += ' news';
+    }
   }
+
+  let hl = 'en-US';
+  let gl = 'US';
+  let ceid = 'US:en';
+
+  if (language === 'ta') {
+    hl = 'ta';
+    gl = 'IN';
+    ceid = 'IN:ta';
+  } else if (language === 'hi') {
+    hl = 'hi';
+    gl = 'IN';
+    ceid = 'IN:hi';
+  } else if (language === 'te') {
+    hl = 'te';
+    gl = 'IN';
+    ceid = 'IN:te';
+  } else if (language === 'bn') {
+    hl = 'bn';
+    gl = 'IN';
+    ceid = 'IN:bn';
+  } else if (language === 'mr') {
+    hl = 'mr';
+    gl = 'IN';
+    ceid = 'IN:mr';
+  } else if (country === 'india' || country === 'chennai' || (location && ['chennai', 'delhi', 'mumbai', 'bengaluru', 'bangalore', 'india'].includes(location.toLowerCase()))) {
+    hl = 'en-IN';
+    gl = 'IN';
+    ceid = 'IN:en';
+  }
+
   return {
-    url: `https://news.google.com/rss/search?q=${encodeURIComponent(query)}+when:2d&hl=en-US&gl=US&ceid=US:en`,
-    source: 'Google News Live'
+    url: `https://news.google.com/rss/search?q=${encodeURIComponent(query)}+when:2d&hl=${hl}&gl=${gl}&ceid=${ceid}`,
+    source: location ? `Local News (${location.toUpperCase()})` : 'Google News Live'
   };
 }
 
@@ -357,14 +397,14 @@ function analyzeSentiment(text) {
 /**
  * Fetch real news from multi-source direct feeds with dynamic Google News search augmentation
  */
-export async function fetchLiveNews(country = 'global', topic = 'all') {
-  const normalizedCountry = (country || 'global').toLowerCase();
+export async function fetchLiveNews(country = 'global', topic = 'all', location = null, language = 'en') {
+  const normalizedCountry = (location || country || 'global').toLowerCase();
   
   // 1. Start with dedicated authoritative feeds
   let targetFeeds = [...(FEED_REGISTRY[normalizedCountry] || FEED_REGISTRY['global'])];
 
-  // 2. Add Google News Real-time Live Query for this country/topic
-  const googleNewsFeed = buildGoogleNewsFeedUrl(normalizedCountry, topic);
+  // 2. Add Google News Real-time Live Query for this country/topic/location/language
+  const googleNewsFeed = buildGoogleNewsFeedUrl(normalizedCountry, topic, location, language);
   targetFeeds.push(googleNewsFeed);
 
   // 3. If topic is Cyber or Economy, add topic-specific feeds
@@ -438,9 +478,12 @@ export async function fetchLiveNews(country = 'global', topic = 'all') {
     }
     if (memoryNewsCache.length > 400) memoryNewsCache = memoryNewsCache.slice(0, 400);
 
-    // If a specific country filter was requested (and not 'global'), return articles for that country
+    // If a specific country/location filter was requested (and not 'global'), return articles
     if (normalizedCountry !== 'global') {
-      const countryMatched = memoryNewsCache.filter(n => n.country === normalizedCountry);
+      if (finalArticles.length > 0) return finalArticles;
+      const countryMatched = memoryNewsCache.filter(n => 
+        n.country === normalizedCountry || (['chennai', 'delhi', 'mumbai', 'bengaluru'].includes(normalizedCountry) && n.country === 'india')
+      );
       return countryMatched.length > 0 ? countryMatched : finalArticles;
     }
 

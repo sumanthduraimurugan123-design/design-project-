@@ -1,8 +1,17 @@
 import React, { useState, useMemo } from 'react';
-import { ExternalLink, Volume2, Globe2, Tag, BookOpen, CheckCircle2, Layers, LayoutList, MapPin } from 'lucide-react';
-import { speakText } from '../services/newsService';
+import { ExternalLink, Volume2, Globe2, HelpCircle, Sparkles, VolumeX } from 'lucide-react';
+import { speakInLanguage, stopSpeaking, playEarcon } from '../services/voiceService';
+import { fetchNewsExplanation } from '../services/newsService';
 
 const TOPICS = ['all', 'Geopolitics', 'Defense', 'Economy', 'Cyber', 'Energy'];
+
+const SENTIMENT_LABEL = {
+  'Hostile / Risk': { cls: 'text-wire-red border-wire-red/40', label: 'Risk' },
+  'Tense':          { cls: 'text-wire-amber border-wire-amber/40', label: 'Tense' },
+  'Positive / Stable': { cls: 'text-wire-green border-wire-green/40', label: 'Stable' },
+  'Constructive':   { cls: 'text-wire-green border-wire-green/40', label: 'Pos.' },
+  'Neutral':        { cls: 'text-wire-subtle border-wire-border', label: 'Neutral' },
+};
 
 export default function NewsPanel({ 
   news = [], 
@@ -12,36 +21,84 @@ export default function NewsPanel({
   activeTopic,
   persona,
   isCognitiveSimple = false,
+  currentLanguage = 'en',
   lastUpdatedTime = '',
   countdown = 30
 }) {
   const [readingId, setReadingId] = useState(null);
+  const [explainingId, setExplainingId] = useState(null);
+  const [explanations, setExplanations] = useState({});
   const [selectedCountryFilter, setSelectedCountryFilter] = useState('all');
-  const [viewMode, setViewMode] = useState('stream'); // 'stream' or 'grouped'
+  const [viewMode, setViewMode] = useState('stream');
 
   const handleSpeak = (e, item, id) => {
     e.stopPropagation();
     e.preventDefault();
     if (readingId === id) {
-      window.speechSynthesis.cancel();
+      stopSpeaking();
       setReadingId(null);
       return;
     }
     setReadingId(id);
-    speakText(`${item.title}. Country: ${item.country_name || item.country}. Reported by ${item.source || 'Global wire'}. Summary: ${item.description}`, () => {
-      setReadingId(null);
-    });
+    setExplainingId(null);
+    playEarcon('click');
+
+    const cleanTitle = (item.title || '').split(' - ')[0];
+    const src = item.source ? `Source: ${item.source}. ` : '';
+    const desc = item.description ? `${item.description}. ` : '';
+
+    speakInLanguage(
+      `${cleanTitle}. ${src} ${desc}`,
+      {
+        language: currentLanguage,
+        rate: 0.95,
+        onEnd: () => setReadingId(null),
+        onError: () => setReadingId(null)
+      }
+    );
   };
 
-  const getCleanDomain = (url) => {
+  const handleExplain = async (e, item, id) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (explainingId === id) {
+      stopSpeaking();
+      setExplainingId(null);
+      return;
+    }
+
+    setExplainingId(id);
+    setReadingId(null);
+    playEarcon('click');
+
+    // Immediate acknowledgment
+    let waitMsg = 'Simplifying news in plain words...';
+    if (currentLanguage === 'ta') waitMsg = 'செய்தியை எளிய தமிழில் விளக்குகிறேன்...';
+    if (currentLanguage === 'hi') waitMsg = 'इस खबर को सरल भाषा में समझा रहे हैं...';
+    speakInLanguage(waitMsg, { language: currentLanguage });
+
     try {
-      return new URL(url).hostname.replace('www.', '');
-    } catch {
-      return 'direct article';
+      const data = await fetchNewsExplanation(item.title, item.description, currentLanguage);
+      setExplanations(prev => ({ ...prev, [id]: data }));
+
+      const speech = data.simpleText || `${data.explanation} ${data.impact}`;
+      speakInLanguage(speech, {
+        language: currentLanguage,
+        rate: 0.95,
+        onEnd: () => setExplainingId(null),
+        onError: () => setExplainingId(null)
+      });
+    } catch (err) {
+      console.error('Explain error:', err);
+      setExplainingId(null);
     }
   };
 
-  // Derive distinct countries present in the current news set with counts
+  const getCleanDomain = (url) => {
+    try { return new URL(url).hostname.replace('www.', ''); }
+    catch { return ''; }
+  };
+
   const availableCountries = useMemo(() => {
     const map = {};
     for (const item of news) {
@@ -49,8 +106,8 @@ export default function NewsPanel({
       if (!map[cId]) {
         map[cId] = {
           id: cId,
-          name: item.country_name || (cId === 'global' ? 'Global Wire' : cId.toUpperCase()),
-          flag: item.country_flag || (cId === 'global' ? '🌐' : '🏳️'),
+          name: item.country_name || (cId === 'global' ? 'Global' : cId),
+          flag: item.country_flag || (cId === 'global' ? '🌐' : ''),
           count: 0
         };
       }
@@ -59,13 +116,11 @@ export default function NewsPanel({
     return Object.values(map).sort((a, b) => b.count - a.count);
   }, [news]);
 
-  // Filter news according to country filter
   const filteredNews = useMemo(() => {
     if (selectedCountryFilter === 'all') return news;
     return news.filter(n => (n.country || 'global') === selectedCountryFilter);
   }, [news, selectedCountryFilter]);
 
-  // Group news by country when in 'grouped' view
   const groupedByCountry = useMemo(() => {
     const groups = {};
     for (const item of filteredNews) {
@@ -73,8 +128,8 @@ export default function NewsPanel({
       if (!groups[cId]) {
         groups[cId] = {
           id: cId,
-          name: item.country_name || (cId === 'global' ? 'Global Wire' : cId.toUpperCase()),
-          flag: item.country_flag || (cId === 'global' ? '🌐' : '🏳️'),
+          name: item.country_name || (cId === 'global' ? 'Global' : cId.toUpperCase()),
+          flag: item.country_flag || (cId === 'global' ? '🌐' : ''),
           articles: []
         };
       }
@@ -83,324 +138,272 @@ export default function NewsPanel({
     return Object.values(groups).sort((a, b) => b.articles.length - a.articles.length);
   }, [filteredNews]);
 
-  const renderNewsCard = (item, idx) => {
+  const renderNewsRow = (item, idx) => {
     const cardId = item.id || `news-${idx}`;
     const isReading = readingId === cardId;
+    const isExplaining = explainingId === cardId;
+    const explanation = explanations[cardId];
     const domain = getCleanDomain(item.url);
+    const sentCfg = SENTIMENT_LABEL[item.sentiment] || SENTIMENT_LABEL['Neutral'];
 
-    // Simplified Cognitive View (Accessibility friendly)
     if (isCognitiveSimple) {
       return (
-        <div
-          key={cardId}
-          className="p-4 rounded-xl bg-black border-2 border-cyber-cyan hover:border-white transition-all shadow-md flex flex-col sm:flex-row items-start justify-between gap-4"
-        >
-          <div className="flex-1 space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl" role="img" aria-label="flag">{item.country_flag || '🌐'}</span>
-              <span className="text-xs font-bold text-amber-300 bg-amber-950/60 border border-amber-500/40 px-2.5 py-0.5 rounded uppercase">
-                {item.country_name || item.country?.toUpperCase()}
-              </span>
-              <span className="text-xs font-bold text-cyber-cyan bg-cyber-cyan/20 px-2.5 py-0.5 rounded uppercase">
-                {item.source || 'WORLD NEWS'}
-              </span>
-            </div>
-            <a
-              href={item.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block text-lg font-bold text-white hover:text-cyber-cyan transition-colors underline leading-snug"
-            >
-              {item.title}
-            </a>
-            <p className="text-sm text-slate-200 leading-relaxed">
-              {item.description}
-            </p>
+        <div key={cardId} className={`px-4 py-4 border-b border-wire-border/50 last:border-0 ${isReading ? 'bg-wire-amber/10' : (isExplaining ? 'bg-wire-blue/10' : '')}`}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xl">{item.country_flag || '🌐'}</span>
+            <span className="font-mono text-xs text-wire-subtle">{item.country_name || item.country}</span>
+            <span className="font-mono text-xs text-wire-subtle">·</span>
+            <span className="font-mono text-xs text-wire-subtle">{item.source}</span>
           </div>
+          <a
+            href={item.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block font-serif text-base text-wire-fg hover:text-wire-amber transition-colors leading-snug mb-2"
+          >
+            {item.title}
+          </a>
+          
+          {explanation ? (
+            <div className="bg-wire-raised border border-wire-amber/40 p-3 my-2 text-wire-fg font-sans text-xs">
+              <span className="font-mono text-[10px] text-wire-amber block mb-1">💡 PLAIN EXPLANATION:</span>
+              <p className="font-medium text-white mb-1">{explanation.explanation}</p>
+              <p className="text-wire-subtle">👉 {explanation.impact}</p>
+            </div>
+          ) : (
+            <p className="text-sm text-wire-subtle leading-relaxed">{item.description}</p>
+          )}
 
-          <div className="flex sm:flex-col gap-2 shrink-0 w-full sm:w-auto">
+          <div className="mt-2.5 flex items-center gap-3">
             <button
               onClick={(e) => handleSpeak(e, item, cardId)}
-              className={`flex-1 sm:flex-none px-4 py-3 rounded-xl border-2 flex items-center justify-center gap-2 transition-all font-bold text-sm ${
-                isReading
-                  ? 'bg-cyber-crimson border-white text-white animate-pulse'
-                  : 'bg-cyber-cyan text-black border-cyber-cyan hover:bg-white'
+              className={`inline-flex items-center gap-1.5 px-3 py-1 font-mono text-xs rounded-sm border transition-colors ${
+                isReading 
+                  ? 'bg-wire-red text-white border-wire-red' 
+                  : 'bg-wire-base text-wire-fg border-wire-border hover:border-wire-amber'
               }`}
             >
-              <Volume2 className="w-5 h-5" />
-              <span>{isReading ? 'STOP' : 'LISTEN'}</span>
+              <Volume2 className="w-3.5 h-3.5" />
+              {isReading ? 'Stop' : '🔊 Listen'}
             </button>
-            <a
-              href={item.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-1 sm:flex-none px-4 py-3 rounded-xl bg-slate-800 text-white border border-slate-600 hover:border-cyber-cyan flex items-center justify-center gap-2 text-sm font-bold"
+
+            <button
+              onClick={(e) => handleExplain(e, item, cardId)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1 font-mono text-xs rounded-sm border transition-colors ${
+                isExplaining 
+                  ? 'bg-wire-amber text-wire-base font-semibold border-wire-amber' 
+                  : 'bg-wire-base text-wire-subtle border-wire-border hover:text-wire-fg hover:border-wire-muted'
+              }`}
             >
-              <ExternalLink className="w-4 h-4" />
-              <span>READ</span>
-            </a>
+              <Sparkles className="w-3.5 h-3.5 text-wire-amber" />
+              {isExplaining ? 'Explaining...' : '💡 Explain'}
+            </button>
           </div>
         </div>
       );
     }
 
-    // Standard Analyst / Casual View
+    // Standard wire row
     return (
       <div
         key={cardId}
+        className={`group px-4 py-3 border-b border-wire-border/40 last:border-0 hover:bg-wire-raised transition-colors cursor-pointer ${
+          isReading ? 'bg-wire-amber/10 border-l-2 border-l-wire-amber' : (isExplaining ? 'bg-wire-blue/10 border-l-2 border-l-wire-blue' : '')
+        }`}
         onClick={(e) => {
           if (!e.target.closest('button') && !e.target.closest('a')) {
             window.open(item.url, '_blank', 'noopener,noreferrer');
           }
         }}
-        className={`group relative p-4 rounded-lg border transition-all duration-200 flex flex-col justify-between gap-3 cursor-pointer ${
-          persona === 'Accessibility mode'
-            ? 'bg-black border-2 border-cyber-cyan text-white hover:border-white'
-            : 'bg-cyber-900/70 hover:bg-cyber-850 border-cyber-border hover:border-cyber-cyan/60 shadow-sm hover:shadow-glow-cyan'
-        }`}
       >
-        {/* Meta Row: Country Flag, Source, Time, Domain, Sentiment */}
-        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono">
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Country Badge */}
-            <span className="px-2 py-0.5 rounded bg-slate-950 text-amber-300 font-bold border border-amber-500/40 flex items-center gap-1.5 shadow-sm">
-              <span className="text-sm">{item.country_flag || '🌐'}</span>
-              <span className="tracking-wide uppercase">{item.country_name || item.country}</span>
+        {/* Metadata strip */}
+        <div className="flex items-center gap-3 mb-1.5 font-mono text-[10px] text-wire-subtle">
+          <span>{item.country_flag || ''} <span className="capitalize">{item.country_name || item.country}</span></span>
+          {item.source && <><span className="text-wire-border">·</span><span>{item.source}</span></>}
+          {item.created_at && (
+            <><span className="text-wire-border">·</span>
+            <span className="tabular-nums">
+              {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span></>
+          )}
+          {item.sentiment && (
+            <span className={`ml-auto border px-1 py-0.5 text-[9px] ${sentCfg.cls}`}>
+              {sentCfg.label}
             </span>
+          )}
 
-            {/* Source Badge */}
-            <span className="px-2.5 py-0.5 rounded bg-cyber-800 text-cyber-cyan font-bold border border-cyber-cyan/30 flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-              {item.source || 'International Wire'}
-            </span>
-
-            <span className="text-slate-400 flex items-center gap-1">
-              {item.created_at ? new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Live'}
-            </span>
-            <span className="text-slate-500 hidden sm:inline">
-              ({domain})
-            </span>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            {/* Sentiment / Risk Badge */}
-            {item.sentiment && (
-              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                item.sentiment.includes('Hostile') || item.sentiment.includes('Risk')
-                  ? 'bg-cyber-crimson/20 text-cyber-crimson border border-cyber-crimson/50 font-mono'
-                  : item.sentiment.includes('Positive')
-                  ? 'bg-cyber-emerald/20 text-cyber-emerald border border-cyber-emerald/50 font-mono'
-                  : 'bg-slate-800 text-slate-300 border border-slate-700 font-mono'
-              }`}>
-                {item.sentiment}
-              </span>
-            )}
-
-            {/* Speech Synthesizer Action */}
+          {/* Action buttons */}
+          <div className="flex items-center gap-1.5 ml-2">
             <button
               onClick={(e) => handleSpeak(e, item, cardId)}
-              className={`p-1.5 rounded transition-all ${
-                isReading
-                  ? 'bg-cyber-crimson/20 text-cyber-crimson border border-cyber-crimson'
-                  : 'hover:bg-cyber-800 text-slate-400 hover:text-cyber-cyan'
+              className={`p-1 rounded transition-colors ${
+                isReading ? 'text-wire-amber bg-wire-amber/20' : 'text-wire-subtle hover:text-wire-fg hover:bg-wire-base'
               }`}
-              title={isReading ? 'Stop Speech' : 'Listen with Text-to-Speech'}
+              title={isReading ? 'Stop listening' : 'Listen to headline'}
             >
-              <Volume2 className="w-4 h-4" />
+              <Volume2 className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              onClick={(e) => handleExplain(e, item, cardId)}
+              className={`p-1 rounded transition-colors ${
+                isExplaining ? 'text-wire-amber bg-wire-amber/20 font-bold' : 'text-wire-subtle hover:text-wire-amber hover:bg-wire-base'
+              }`}
+              title="Explain news in simple words"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
 
-        {/* Article Headline with Direct Anchor Link */}
-        <div>
-          <h3 className="text-sm font-semibold text-white group-hover:text-cyber-cyan transition-colors leading-snug">
-            <a
-              href={item.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:underline inline-flex items-start gap-1.5"
-            >
-              <span>{item.title}</span>
-            </a>
-          </h3>
-          <div className="text-[10px] font-mono text-cyan-400/80 hover:text-cyan-300 truncate max-w-md mt-1">
-            ↳ {item.url}
+        {/* Headline */}
+        <a
+          href={item.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block font-serif text-sm text-wire-fg group-hover:text-wire-amber transition-colors leading-snug"
+        >
+          {item.title}
+        </a>
+
+        {/* Plain-Language Explanation Callout if active */}
+        {explanation && (
+          <div className="mt-2 bg-wire-base border border-wire-amber/40 p-2.5 text-xs text-wire-fg animate-in fade-in duration-150">
+            <div className="flex items-center gap-1.5 mb-1 font-mono text-[10px] text-wire-amber">
+              <Sparkles className="w-3 h-3 text-wire-amber" />
+              <span>PLAIN EXPLANATION</span>
+            </div>
+            <p className="font-semibold text-white mb-0.5">{explanation.explanation}</p>
+            <p className="text-wire-subtle text-[11px]">👉 {explanation.impact}</p>
           </div>
-        </div>
+        )}
 
-        {/* Article Description */}
-        <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed font-sans">
-          {item.description}
-        </p>
-
-        {/* Direct Action Bar */}
-        <div className="pt-2 border-t border-cyber-border/40 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
-          <span className="text-[11px] text-slate-400 flex items-center gap-1">
-            <Tag className="w-3 h-3 text-slate-500" /> Sector: {item.topic || 'Geopolitics'}
-          </span>
-
-          <a
-            href={item.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-cyber-cyan/15 hover:bg-cyber-cyan text-cyber-cyan hover:text-cyber-950 font-bold border border-cyber-cyan/40 transition-all text-xs"
-          >
-            <span>OPEN ARTICLE</span>
-            <ExternalLink className="w-3.5 h-3.5 stroke-[2.5]" />
-          </a>
-        </div>
+        {/* Description — only in Analyst mode when not explained */}
+        {!explanation && persona === 'Analyst' && item.description && item.description !== item.title && (
+          <p className="mt-1 text-[11px] text-wire-subtle leading-relaxed line-clamp-1 font-sans">
+            {item.description}
+          </p>
+        )}
       </div>
     );
   };
 
   return (
-    <div className="flex flex-col h-full cyber-panel rounded-xl p-4 border border-cyber-border/80">
+    <div className="bg-wire-surface border border-wire-border flex flex-col">
       
-      {/* Header & Live Stream Status */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-cyber-border">
-        <div className="flex items-center space-x-2.5">
-          <BookOpen className="w-5 h-5 text-cyber-cyan" />
-          <h2 className="text-sm font-mono font-bold tracking-wide text-white uppercase flex items-center gap-2">
-            WORLDWIDE INTEL WIRE <span className="text-cyber-cyan">[{selectedCountry.toUpperCase()}]</span>
-          </h2>
-          <span className="text-xs font-mono px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-500/50 flex items-center gap-1.5 font-bold">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            {filteredNews.length} DISPATCHES
-          </span>
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-wire-border flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div className="flex items-center gap-3">
+          <h2 className="font-serif text-wire-fg text-sm font-semibold">News Feed</h2>
+          <span className="font-mono text-[10px] text-wire-subtle">{filteredNews.length} dispatches</span>
         </div>
 
-        {/* View Mode & Countdown */}
-        <div className="flex items-center space-x-3 text-xs font-mono">
-          <div className="flex items-center bg-cyber-900 border border-cyber-border rounded-lg p-0.5">
+        <div className="flex items-center gap-3 font-mono text-[10px]">
+          {/* View toggle */}
+          <div className="flex items-center border border-wire-border">
             <button
               onClick={() => setViewMode('stream')}
-              className={`px-2.5 py-1 rounded flex items-center gap-1 text-[11px] transition-all ${
-                viewMode === 'stream' ? 'bg-cyber-cyan text-cyber-950 font-bold' : 'text-slate-400 hover:text-white'
+              className={`px-2.5 py-1 transition-colors ${
+                viewMode === 'stream' ? 'bg-wire-raised text-wire-fg' : 'text-wire-subtle hover:text-wire-fg'
               }`}
-              title="Continuous Chronological Stream"
-            >
-              <LayoutList className="w-3.5 h-3.5" />
-              <span>STREAM</span>
-            </button>
+            >Stream</button>
             <button
               onClick={() => setViewMode('grouped')}
-              className={`px-2.5 py-1 rounded flex items-center gap-1 text-[11px] transition-all ${
-                viewMode === 'grouped' ? 'bg-cyber-cyan text-cyber-950 font-bold' : 'text-slate-400 hover:text-white'
+              className={`px-2.5 py-1 transition-colors border-l border-wire-border ${
+                viewMode === 'grouped' ? 'bg-wire-raised text-wire-fg' : 'text-wire-subtle hover:text-wire-fg'
               }`}
-              title="Group Articles By Country"
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>BY COUNTRY</span>
-            </button>
+            >Grouped</button>
           </div>
-
-          <span className="px-2 py-1 rounded bg-cyber-900 border border-cyber-cyan/30 text-cyber-cyan text-[11px]">
-            SYNC: <strong className="text-white">{countdown}s</strong>
+          
+          <span className={`tabular-nums ${countdown <= 5 ? 'text-wire-amber' : 'text-wire-subtle'}`}>
+            Sync in {countdown}s
           </span>
         </div>
       </div>
 
-      {/* Row 1: Topic Filters */}
-      <div className="flex flex-wrap items-center gap-1.5 py-2.5 border-b border-cyber-border/60 text-xs font-mono">
-        <span className="text-slate-400 mr-1">TOPIC:</span>
+      {/* Topic filter strip */}
+      <div className="px-4 py-2 border-b border-wire-border/60 flex flex-wrap gap-1.5">
         {TOPICS.map(t => (
           <button
             key={t}
             onClick={() => onSelectTopic(t)}
-            className={`px-2.5 py-1 rounded transition-all ${
+            className={`font-mono text-[10px] px-2.5 py-1 transition-colors border ${
               activeTopic === t
-                ? 'bg-cyber-cyan text-cyber-950 font-bold shadow-glow-cyan'
-                : 'bg-cyber-900 text-slate-300 hover:text-white border border-cyber-border hover:border-cyber-cyan/30'
+                ? 'bg-wire-amber text-wire-base border-wire-amber font-medium'
+                : 'text-wire-subtle border-wire-border hover:text-wire-fg hover:border-wire-muted'
             }`}
           >
-            {t.toUpperCase()}
+            {t}
           </button>
         ))}
       </div>
 
-      {/* Row 2: Country Categorization Bar */}
+      {/* Country sub-filter */}
       {availableCountries.length > 1 && (
-        <div className="flex flex-wrap items-center gap-1.5 py-2.5 border-b border-cyber-border/40 text-xs font-mono">
-          <span className="text-slate-400 mr-1 flex items-center gap-1">
-            <MapPin className="w-3 h-3 text-amber-400" /> NATIONS:
-          </span>
+        <div className="px-4 py-2 border-b border-wire-border/40 flex flex-wrap gap-1.5">
           <button
             onClick={() => setSelectedCountryFilter('all')}
-            className={`px-2.5 py-1 rounded transition-all ${
+            className={`font-mono text-[10px] px-2.5 py-1 border transition-colors ${
               selectedCountryFilter === 'all'
-                ? 'bg-amber-400 text-slate-950 font-bold shadow-sm'
-                : 'bg-cyber-900 text-slate-300 hover:text-white border border-cyber-border'
+                ? 'text-wire-fg border-wire-muted bg-wire-raised'
+                : 'text-wire-subtle border-wire-border hover:text-wire-fg'
             }`}
-          >
-            ALL ({news.length})
-          </button>
-
-          {availableCountries.slice(0, 10).map(c => (
+          >All</button>
+          {availableCountries.slice(0, 9).map(c => (
             <button
               key={c.id}
               onClick={() => setSelectedCountryFilter(c.id)}
-              className={`px-2.5 py-1 rounded transition-all flex items-center gap-1.5 ${
+              className={`font-mono text-[10px] px-2.5 py-1 border transition-colors flex items-center gap-1 ${
                 selectedCountryFilter === c.id
-                  ? 'bg-amber-400 text-slate-950 font-bold shadow-sm'
-                  : 'bg-cyber-900 text-slate-300 hover:text-white border border-cyber-border hover:border-amber-400/40'
+                  ? 'text-wire-fg border-wire-muted bg-wire-raised'
+                  : 'text-wire-subtle border-wire-border hover:text-wire-fg'
               }`}
             >
-              <span>{c.flag}</span>
-              <span>{c.name}</span>
-              <span className="text-[10px] opacity-75">({c.count})</span>
+              {c.flag && <span>{c.flag}</span>}
+              <span className="capitalize">{c.name}</span>
             </button>
           ))}
         </div>
       )}
 
-      {/* News Stream Body */}
-      <div className="flex-1 overflow-y-auto mt-3 pr-1 space-y-4 max-h-[640px]">
+      {/* News body */}
+      <div className="flex-1 overflow-y-auto max-h-[660px]">
         {isLoading && news.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 space-y-3">
-            <div className="w-8 h-8 border-2 border-cyber-cyan border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs font-mono text-cyber-cyan animate-pulse">INTERCEPTING REAL-TIME WORLDWIDE SATELLITE DISPATCHES...</p>
+          <div className="flex items-center justify-center py-20 gap-2.5 font-mono text-[11px] text-wire-subtle">
+            <div className="w-3.5 h-3.5 border border-wire-muted border-t-wire-amber rounded-full animate-spin" />
+            Connecting to wire...
           </div>
         ) : filteredNews.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center text-slate-400 space-y-2">
-            <Globe2 className="w-10 h-10 text-slate-600" />
-            <p className="text-sm font-mono">No active intelligence dispatches for this country/topic selection.</p>
-            <p className="text-xs text-slate-500">Auto-refreshing live signals from BBC, NYT, Guardian, and international wires...</p>
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <Globe2 className="w-7 h-7 text-wire-muted mb-2.5" />
+            <p className="font-mono text-[11px] text-wire-subtle">No dispatches match your selection.</p>
           </div>
         ) : viewMode === 'grouped' ? (
-          // Grouped by Country View
           groupedByCountry.map(group => (
-            <div key={group.id} className="space-y-3">
-              <div className="flex items-center justify-between pb-1.5 border-b border-cyber-border/70 sticky top-0 bg-[#070c1e] z-10 py-1">
+            <div key={group.id}>
+              <div className="px-4 py-2 bg-wire-raised border-b border-wire-border flex items-center justify-between sticky top-0 z-10">
                 <div className="flex items-center gap-2">
-                  <span className="text-xl">{group.flag}</span>
-                  <h3 className="text-xs font-mono font-bold text-amber-300 uppercase tracking-wide">
-                    {group.name}
-                  </h3>
+                  {group.flag && <span>{group.flag}</span>}
+                  <span className="font-serif text-xs font-semibold text-wire-fg capitalize">{group.name}</span>
                 </div>
-                <span className="text-[11px] font-mono text-slate-400">
-                  {group.articles.length} dispatches
-                </span>
+                <span className="font-mono text-[10px] text-wire-subtle">{group.articles.length}</span>
               </div>
-              <div className="space-y-3 pl-1">
-                {group.articles.map((item, idx) => renderNewsCard(item, `${group.id}-${idx}`))}
+              <div className="pl-3">
+                {group.articles.map((item, idx) => renderNewsRow(item, `${group.id}-${idx}`))}
               </div>
             </div>
           ))
         ) : (
-          // Continuous Stream View
-          filteredNews.map((item, idx) => renderNewsCard(item, idx))
+          filteredNews.map((item, idx) => renderNewsRow(item, idx))
         )}
       </div>
 
-      {/* Footer Info */}
-      <div className="mt-3 pt-2.5 border-t border-cyber-border text-[11px] font-mono text-slate-400 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-cyber-cyan flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-          VERIFIED NATION-LEVEL INTELLIGENCE • DIRECT CANONICAL DISPATCHES
-        </span>
-        <span className="text-slate-400">
-          AUTONOMOUS SYNC EVERY 30S
-        </span>
+      {/* Footer */}
+      <div className="px-4 py-2 border-t border-wire-border flex items-center justify-between">
+        <span className="font-mono text-[10px] text-wire-subtle">Verified wire feeds</span>
+        {lastUpdatedTime && (
+          <span className="font-mono text-[10px] text-wire-subtle">Updated {lastUpdatedTime}</span>
+        )}
       </div>
     </div>
   );
