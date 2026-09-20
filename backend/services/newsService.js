@@ -343,14 +343,17 @@ async function fetchSingleFeed(feedMeta, hintedCountry, topic) {
       let articleTitle = decodeHtmlEntities(String(item.title).trim());
       let articleSource = feedMeta.source;
 
-      // For Google News feeds, extract specific source from item.source or title suffix
+      // For feeds with source tags or suffix, extract source and clean title
       if (item.source) {
         if (typeof item.source === 'string') {
           articleSource = decodeHtmlEntities(item.source.trim());
         } else if (item.source?.['#text']) {
           articleSource = decodeHtmlEntities(item.source['#text'].trim());
         }
-      } else if (feedMeta.source.includes('Google News') && articleTitle.includes(' - ')) {
+        if (articleTitle.toLowerCase().endsWith(` - ${articleSource.toLowerCase()}`)) {
+          articleTitle = articleTitle.slice(0, -(articleSource.length + 3)).trim();
+        }
+      } else if (articleTitle.includes(' - ')) {
         const parts = articleTitle.split(' - ');
         if (parts.length > 1) {
           articleSource = parts.pop().trim();
@@ -358,10 +361,34 @@ async function fetchSingleFeed(feedMeta, hintedCountry, topic) {
         }
       }
 
-      // Clean HTML tags from description
+      // Thoroughly clean HTML tags, entities, and google link remnants from description
       let cleanDesc = item.description || '';
-      cleanDesc = decodeHtmlEntities(cleanDesc.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, ' ').trim());
-      if (!cleanDesc) cleanDesc = articleTitle;
+      if (typeof cleanDesc !== 'string') {
+        cleanDesc = cleanDesc['#text'] || cleanDesc.a?.['#text'] || '';
+      }
+      cleanDesc = String(cleanDesc)
+        .replace(/&lt;[^>]*&gt;/gi, ' ')
+        .replace(/<[^>]*>/gi, ' ')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&')
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;/gi, "'")
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      // If description contains raw Google News URL artifacts or tags, wipe it
+      if (cleanDesc.includes('news.google.com') || cleanDesc.includes('target="_blank"') || cleanDesc.includes('<a href=')) {
+        cleanDesc = '';
+      }
+
+      // If description merely repeats the headline, clear it
+      const normTitle = articleTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const normDesc = cleanDesc.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (normDesc === normTitle || normTitle.startsWith(normDesc) || normDesc.startsWith(normTitle)) {
+        cleanDesc = '';
+      }
 
       const pubDate = item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString();
 

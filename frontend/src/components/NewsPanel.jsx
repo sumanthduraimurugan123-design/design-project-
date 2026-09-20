@@ -13,6 +13,35 @@ const SENTIMENT_LABEL = {
   'Neutral':        { cls: 'text-wire-subtle border-wire-border bg-slate-900/30', label: 'Neutral' },
 };
 
+function cleanDescription(desc, title) {
+  if (!desc || typeof desc !== 'string') return '';
+  let text = desc
+    .replace(/&lt;[^>]*&gt;/gi, ' ')
+    .replace(/<[^>]*>/gi, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (text.includes('news.google.com') || text.includes('target="_blank"') || text.includes('<a href=')) {
+    return '';
+  }
+
+  if (title) {
+    const normTitle = title.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normText = text.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (normText === normTitle || normText.startsWith(normTitle) || normTitle.startsWith(normText)) {
+      return '';
+    }
+  }
+
+  return text;
+}
+
 export default function NewsPanel({ 
   news = [], 
   isLoading = false, 
@@ -230,9 +259,11 @@ export default function NewsPanel({
             </div>
           )}
 
-          {!explanation && !opinion && (
-            <p className="text-sm text-slate-300 leading-relaxed mb-3">{item.description}</p>
-          )}
+          {(() => {
+            const desc = cleanDescription(item.description, item.title);
+            if (!desc || explanation || opinion) return null;
+            return <p className="text-sm text-slate-300 leading-relaxed mb-3">{desc}</p>;
+          })()}
 
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <button
@@ -389,11 +420,15 @@ export default function NewsPanel({
           {item.title}
         </a>
 
-        {item.description && (
-          <p className="text-xs text-wire-subtle font-sans leading-relaxed line-clamp-2 mb-2">
-            {item.description}
-          </p>
-        )}
+        {(() => {
+          const desc = cleanDescription(item.description, item.title);
+          if (!desc) return null;
+          return (
+            <p className="text-xs text-wire-subtle font-sans leading-relaxed line-clamp-2 mb-2">
+              {desc}
+            </p>
+          );
+        })()}
 
         {/* Personalized AI Citizen Opinion */}
         {opinion && (

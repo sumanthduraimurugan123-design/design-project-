@@ -141,6 +141,38 @@ const EASY_NEIGHBORHOODS = [
   { id: 'all_india', label: { en: 'All India', ta: 'இந்தியா', hi: 'अखिल भारत' }, loc: null, icon: '🇮🇳' },
 ];
 
+// Clean raw HTML tags, entities, and Google News link artifacts from description
+function cleanDescription(desc, title) {
+  if (!desc || typeof desc !== 'string') return '';
+  let text = desc
+    .replace(/&lt;[^>]*&gt;/gi, ' ')
+    .replace(/<[^>]*>/gi, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Strip Google News redirect URLs or tag remnants
+  if (text.includes('news.google.com') || text.includes('target="_blank"') || text.includes('<a href=')) {
+    return '';
+  }
+
+  // If description is identical to headline or merely repeats title, omit it
+  if (title) {
+    const normTitle = title.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normText = text.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (normText === normTitle || normText.startsWith(normTitle) || normTitle.startsWith(normText)) {
+      return '';
+    }
+  }
+
+  return text;
+}
+
 export default function EasyModeView({
   news = [],
   alerts = [],
@@ -215,20 +247,20 @@ export default function EasyModeView({
     setExplainingId(null);
 
     const title = item.title ? item.title.split(' - ')[0] : '';
-    const desc = item.description || '';
+    const desc = cleanDescription(item.description, title);
     const src = item.source ? `Source: ${item.source}. ` : '';
 
-    let textToSpeak = `${title}. ${src} ${desc}`;
+    let textToSpeak = `${title}. ${src} ${desc}`.trim();
     if (currentLanguage === 'ta') {
-      textToSpeak = `செய்தி: ${title}. ${src ? `செய்தி மூலம்: ${item.source}. ` : ''} ${desc}`;
+      textToSpeak = `செய்தி: ${title}. ${src ? `செய்தி மூலம்: ${item.source}. ` : ''} ${desc}`.trim();
     } else if (currentLanguage === 'hi') {
-      textToSpeak = `समाचार: ${title}। ${src ? `स्रोत: ${item.source}। ` : ''} ${desc}`;
+      textToSpeak = `समाचार: ${title}। ${src ? `स्रोत: ${item.source}। ` : ''} ${desc}`.trim();
     } else if (currentLanguage === 'te') {
-      textToSpeak = `వార్త: ${title}। ${src ? `మూలం: ${item.source}। ` : ''} ${desc}`;
+      textToSpeak = `వార్త: ${title}। ${src ? `మూలం: ${item.source}। ` : ''} ${desc}`.trim();
     } else if (currentLanguage === 'bn') {
-      textToSpeak = `সংবাদ: ${title}। ${src ? `সূত্র: ${item.source}। ` : ''} ${desc}`;
+      textToSpeak = `সংবাদ: ${title}। ${src ? `সূত্র: ${item.source}। ` : ''} ${desc}`.trim();
     } else if (currentLanguage === 'mr') {
-      textToSpeak = `बातमी: ${title}। ${src ? `स्रोत: ${item.source}। ` : ''} ${desc}`;
+      textToSpeak = `बातमी: ${title}। ${src ? `स्रोत: ${item.source}। ` : ''} ${desc}`.trim();
     }
 
     speakInLanguage(textToSpeak, {
@@ -697,9 +729,9 @@ export default function EasyModeView({
                   )}
                 </div>
 
-                {/* Big Headline */}
+                {/* Big Headline (Source suffix stripped) */}
                 <h3 className="text-lg sm:text-xl font-bold text-white leading-snug mb-2.5">
-                  {item.title}
+                  {item.title ? item.title.split(' - ')[0] : ''}
                 </h3>
 
                 {/* Plain-Language Explanation Box if triggered */}
@@ -718,20 +750,24 @@ export default function EasyModeView({
                   </div>
                 )}
 
-                {/* Short Description */}
-                {item.description && !explanation && (
-                  <p className="text-sm text-zinc-300 leading-relaxed mb-4">
-                    {item.description}
-                  </p>
-                )}
+                {/* Short Clean Description (omits raw HTML artifacts and title duplicates) */}
+                {(() => {
+                  const cleanDescText = cleanDescription(item.description, item.title);
+                  if (!cleanDescText || explanation) return null;
+                  return (
+                    <p className="text-sm text-zinc-300 leading-relaxed mb-4">
+                      {cleanDescText}
+                    </p>
+                  );
+                })()}
 
                 {/* 3 GIANT ACTION BUTTONS PER CARD (LISTEN, EXPLAIN, REPEAT) */}
                 <div className="grid grid-cols-3 gap-2.5 pt-2">
                   
-                  {/* Button 1: 🔊 LISTEN */}
+                  {/* Button 1: LISTEN */}
                   <button
                     onClick={() => handleListenArticle(item, cardId)}
-                    className={`flex items-center justify-center gap-1.5 py-3 px-2 sm:px-4 rounded-lg font-black text-xs sm:text-sm transition-all active:scale-95 shadow-md ${
+                    className={`flex items-center justify-center gap-2 py-3 px-2 sm:px-4 rounded-lg font-black text-xs sm:text-sm transition-all active:scale-95 shadow-md ${
                       isReading 
                         ? 'bg-red-600 text-white animate-pulse' 
                         : 'bg-yellow-400 hover:bg-yellow-300 text-black'
@@ -742,14 +778,14 @@ export default function EasyModeView({
                     <span>
                       {isReading 
                         ? t('STOP', 'நிறுத்து', 'रोकें', 'ఆపు', 'থামো', 'थांबा')
-                        : t('🔊 LISTEN', '🔊 கேளுங்கள்', '🔊 सुनें', '🔊 వినండి', '🔊 শুনুন', '🔊 ऐका')}
+                        : t('LISTEN', 'கேளுங்கள்', 'सुनें', 'వినండి', 'শুনুন', 'ऐका')}
                     </span>
                   </button>
 
-                  {/* Button 2: 💡 EXPLAIN */}
+                  {/* Button 2: EXPLAIN */}
                   <button
                     onClick={() => handleExplainArticle(item, cardId)}
-                    className={`flex items-center justify-center gap-1.5 py-3 px-2 sm:px-4 rounded-lg font-black text-xs sm:text-sm transition-all active:scale-95 shadow-md ${
+                    className={`flex items-center justify-center gap-2 py-3 px-2 sm:px-4 rounded-lg font-black text-xs sm:text-sm transition-all active:scale-95 shadow-md ${
                       isExplaining 
                         ? 'bg-sky-600 text-white animate-pulse' 
                         : 'bg-zinc-800 hover:bg-zinc-700 text-sky-400 border-2 border-sky-400/60'
@@ -760,19 +796,19 @@ export default function EasyModeView({
                     <span>
                       {isExplaining 
                         ? t('EXPLAINING...', 'விளங்குகிறது...', 'समझा रहे हैं...', 'వివరిస్తోంది...', 'ব্যাখ্যা হচ্ছে...', 'स्पष्टीकरण सुरू...')
-                        : t('💡 EXPLAIN', '💡 விளக்கம்', '💡 समझाइए', '💡 వివరణ', '💡 ব্যাখ্যা', '💡 समजून घ्या')}
+                        : t('EXPLAIN', 'விளக்கம்', 'समझाइए', 'వివరణ', 'ব্যাখ্যা', 'समजून घ्या')}
                     </span>
                   </button>
 
-                  {/* Button 3: 🔁 REPEAT */}
+                  {/* Button 3: REPEAT */}
                   <button
                     onClick={() => handleRepeatArticle(item, cardId)}
-                    className="flex items-center justify-center gap-1.5 py-3 px-2 sm:px-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-2 border-zinc-700 rounded-lg font-black text-xs sm:text-sm transition-all active:scale-95 shadow-md"
+                    className="flex items-center justify-center gap-2 py-3 px-2 sm:px-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-2 border-zinc-700 rounded-lg font-black text-xs sm:text-sm transition-all active:scale-95 shadow-md"
                     aria-label="Repeat reading this news"
                   >
                     <RotateCcw className="w-4 h-4 stroke-[2.5]" />
                     <span>
-                      {t('🔁 REPEAT', '🔁 மீண்டும்', '🔁 दोहराएं', '🔁 మళ్ళీ', '🔁 আবার', '🔁 पुन्हा')}
+                      {t('REPEAT', 'மீண்டும்', 'दोहराएं', 'మళ్ళీ', 'আবার', 'पुन्हा')}
                     </span>
                   </button>
 
