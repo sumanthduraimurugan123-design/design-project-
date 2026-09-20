@@ -71,9 +71,10 @@ function startBackgroundSync() {
   }, 30000);
 }
 
-// Start Server
-app.listen(PORT, () => {
-  console.log(`
+// Start Server (only when running as standalone Node server, not as Vercel serverless function)
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`
   =============================================================
   🌐 GLOBAL INTEL & TELEMETRY (UGI) - BACKEND SERVER
   =============================================================
@@ -82,13 +83,17 @@ app.listen(PORT, () => {
   📡 Real News Engine:  ACTIVE (Google News Live & Global Feeds)
   🚨 Alert Engine:      ACTIVE (Real-time Keyword & Risk Scanner)
   =============================================================
-  `);
+    `);
 
-  startBackgroundSync();
-});
+    startBackgroundSync();
+  });
+}
 
 // Clean termination handling
 process.on('SIGINT', () => {
   if (syncInterval) clearInterval(syncInterval);
   process.exit(0);
 });
+
+export default app;
+
