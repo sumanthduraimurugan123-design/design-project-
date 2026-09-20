@@ -351,3 +351,202 @@ export function explainNews(title = '', description = '', language = 'en') {
     };
   }
 }
+
+/**
+ * Generate Personalized AI-Based Opinions
+ * Adapts tone, depth, and actionable insights specifically for:
+ * 1. Analyst: Strategic intelligence assessment, threat level, systemic & defense implications
+ * 2. Casual user: Citizen AI perspective, everyday life impact, commute & household advice
+ * 3. Accessibility mode: Simple, jargon-free spoken insight ready for voice playback
+ */
+export function generatePersonalizedOpinion(title = '', description = '', persona = 'Casual user', language = 'en') {
+  const t = (title + ' ' + description).toLowerCase();
+  const lang = (language || 'en').toLowerCase();
+
+  // Determine domain theme
+  let theme = 'general';
+  if (t.includes('bridge') || t.includes('road') || t.includes('metro') || t.includes('traffic') || t.includes('waterlogging') || t.includes('power cut') || t.includes('shutdown') || t.includes('bus') || t.includes('train') || t.includes('flight') || t.includes('corporation') || t.includes('flyover') || t.includes('smart city')) {
+    theme = 'civic_transit';
+  } else if (t.includes('rain') || t.includes('flood') || t.includes('cyclone') || t.includes('storm') || t.includes('weather') || t.includes('alert') || t.includes('heatwave')) {
+    theme = 'weather_safety';
+  } else if (t.includes('robbed') || t.includes('murder') || t.includes('arrest') || t.includes('police') || t.includes('waylaid') || t.includes('crime') || t.includes('scam') || t.includes('cyber') || t.includes('fraud') || t.includes('cbi') || t.includes('custody')) {
+    theme = 'crime_security';
+  } else if (t.includes('petrol') || t.includes('diesel') || t.includes('gold') || t.includes('price') || t.includes('inflation') || t.includes('tax') || t.includes('market') || t.includes('rbi') || t.includes('bank') || t.includes('salary') || t.includes('gst')) {
+    theme = 'economy_costs';
+  } else if (t.includes('hospital') || t.includes('doctor') || t.includes('dengue') || t.includes('fever') || t.includes('health') || t.includes('medical') || t.includes('drug') || t.includes('vaccine')) {
+    theme = 'health_public';
+  } else if (t.includes('war') || t.includes('strike') || t.includes('missile') || t.includes('military') || t.includes('treaty') || t.includes('minister') || t.includes('election') || t.includes('border') || t.includes('defense') || t.includes('ceasefire')) {
+    theme = 'geopolitics_defense';
+  }
+
+  // 1. ANALYST PERSONA (Strategic Intel Assessment)
+  if (persona === 'Analyst') {
+    const assessments = {
+      civic_transit: {
+        opinion: `Critical municipal infrastructure bottleneck identified. Arterial transit disruption affects localized commercial flow, workforce mobility, and logistics response times. Recommended advisory: Monitor alternative secondary arteries and urban transit load.`,
+        keyTakeaway: 'Infrastructure strain on urban transit corridor; expect supply & commuter latency.',
+        impactLevel: 'ELEVATED',
+        badge: 'Strategic Intel Assessment'
+      },
+      weather_safety: {
+        opinion: `Hydro-meteorological risk elevation detected. Threat to ground transport corridors, power substations, and supply-chain continuity. Heightened municipal disaster response and asset protection posture warranted.`,
+        keyTakeaway: 'High severe weather disruption risk; critical services on alert.',
+        impactLevel: 'HIGH',
+        badge: 'Disaster Threat Assessment'
+      },
+      crime_security: {
+        opinion: `Local security and law-enforcement vector active. Tactical response and investigative proceedings underway. Operational risk to nearby commercial establishments remains localized.`,
+        keyTakeaway: 'Localized security incident; commercial asset vigilance advised.',
+        impactLevel: 'ELEVATED',
+        badge: 'Security Vector Analysis'
+      },
+      economy_costs: {
+        opinion: `Fiscal volatility and macro-economic rate adjustments impacting consumer purchasing power and municipal trade indexes. Risk of downstream inflationary pressures across regional service sectors.`,
+        keyTakeaway: 'Macro-economic cost volatility; pricing adjustments expected.',
+        impactLevel: 'MODERATE',
+        badge: 'Macro Economic Intel'
+      },
+      health_public: {
+        opinion: `Epidemiological alert and public health infrastructure monitoring active. Capacity utilization in regional clinics and emergency healthcare supply networks under observation.`,
+        keyTakeaway: 'Public health vigilance required; medical resources mobilised.',
+        impactLevel: 'ELEVATED',
+        badge: 'Biosecurity & Health Intel'
+      },
+      geopolitics_defense: {
+        opinion: `Geopolitical sovereignty tension or strategic realignment observed. Direct influence on regional bilateral stability, defense readiness posture, and strategic international commerce corridors.`,
+        keyTakeaway: 'Geopolitical realignment impacting regional defense and market stability.',
+        impactLevel: 'HIGH',
+        badge: 'Geopolitical Threat Assessment'
+      },
+      general: {
+        opinion: `Significant regional dispatch under intelligence monitoring. Policy ramifications and municipal governance actions likely to influence localized stability and administrative timelines.`,
+        keyTakeaway: 'Monitored administrative development with regional policy impact.',
+        impactLevel: 'INFORMATIONAL',
+        badge: 'Strategic Assessment'
+      }
+    };
+
+    const sel = assessments[theme] || assessments.general;
+    return {
+      persona: 'Analyst',
+      badge: sel.badge,
+      impactLevel: sel.impactLevel,
+      opinion: sel.opinion,
+      keyTakeaway: sel.keyTakeaway,
+      speechText: `Strategic intelligence assessment: ${sel.opinion} Key takeaway: ${sel.keyTakeaway}`
+    };
+  }
+
+  // 2. CASUAL USER PERSONA (Citizen AI Perspective / Everyday Advice)
+  if (persona === 'Casual user') {
+    const citizenPerspectives = {
+      civic_transit: {
+        en: {
+          opinion: `If you live or travel near this area, expect traffic delays, route diversions, or temporary power disruptions. Plan your travel 15-20 minutes earlier and check live map navigation before heading out.`,
+          keyTakeaway: `Plan extra travel time and use alternative routes if commuting nearby.`,
+          badge: `Citizen AI Perspective`
+        },
+        ta: {
+          opinion: `இந்தப் பகுதியில் நீங்கள் பயணம் செய்தால் அல்லது வசித்தால், போக்குவரத்து நெரிசல் அல்லது மாற்றுப் பாதைகளை எதிர்பார்க்கலாம். புறப்படுவதற்கு முன் 15 நிமிடங்கள் முன்னதாக திட்டமிட்டு செல்லுங்கள்.`,
+          keyTakeaway: `பயண நேரத்தை முன்கூட்டியே திட்டமிடுங்கள்; மாற்றுப் பாதைகளைப் பயன்படுத்துங்கள்.`,
+          badge: `பொதுமக்கள் பார்வை`
+        },
+        hi: {
+          opinion: `यदि आप इस इलाके में रहते हैं या यात्रा कर रहे हैं, तो ट्रैफिक जाम या डायवर्जन की संभावना है। निकलने से पहले थोड़ा अतिरिक्त समय लेकर चलें।`,
+          keyTakeaway: `यात्रा के लिए 15-20 मिनट का अतिरिक्त समय लेकर चलें।`,
+          badge: `नागरिक एआई राय`
+        }
+      },
+      weather_safety: {
+        en: {
+          opinion: `Bad weather or rain alert in your area. Keep umbrellas and emergency lights ready, avoid parking vehicles under trees or in low-lying waterlogged streets.`,
+          keyTakeaway: `Stay safe indoors if possible and avoid waterlogged roads.`,
+          badge: `Weather Safety Advisory`
+        },
+        ta: {
+          opinion: `உங்கள் பகுதியில் தீவிர வானிலை அல்லது மழை எச்சரிக்கை விடுக்கப்பட்டுள்ளது. தேவை இல்லாமல் வெளியே செல்ல வேண்டாம்; தாழ்வான பகுதிகளில் வாகனங்களை நிறுத்தாதீர்கள்.`,
+          keyTakeaway: `பாதுகாப்பாக வீட்டில் இருங்கள்; மழைநீர் தேங்கிய இடங்களைத் தவிர்க்கவும்.`,
+          badge: `வானிலை பாதுகாப்பு ஆலோசனை`
+        },
+        hi: {
+          opinion: `मौसम विभाग ने बारिश या खराब मौसम की चेतावनी जारी की है। अनावश्यक रूप से बाहर न निकलें और जलभराव वाले रास्तों से बचें।`,
+          keyTakeaway: `सुरक्षित रहें और जलभराव वाले रास्तों से बचें।`,
+          badge: `मौसम सुरक्षा सलाह`
+        }
+      },
+      crime_security: {
+        en: {
+          opinion: `Police and authorities are actively managing this situation. Residents in nearby neighborhoods are advised to be alert and report any suspicious activity to local police helplines.`,
+          keyTakeaway: `Stay vigilant in local neighborhoods and keep emergency numbers handy.`,
+          badge: `Community Safety Notice`
+        },
+        ta: {
+          opinion: `காவல்துறையினர் தீவிர விசாரணை மேற்கொண்டு வருகின்றனர். அருகில் உள்ள பொதுமக்கள் விழிப்புடன் இருக்குமாறும், சந்தேகத்திற்கிடமான நடமாட்டங்களை காவல்துறையிடம் தெரிவிக்குமாறும் கேட்டுக் கொள்ளப்படுகிறார்கள்.`,
+          keyTakeaway: `விழிப்புடன் இருங்கள்; அவசர உதவி எண்களை நினைவில் கொள்ளுங்கள்.`,
+          badge: `சமூக பாதுகாப்பு குறிப்பு`
+        },
+        hi: {
+          opinion: `पुलिस इस मामले पर कड़ी नजर रख रही है। आसपास के निवासियों को सतर्क रहने और किसी भी संदिग्ध गतिविधि की सूचना पुलिस को देने की सलाह दी जाती है।`,
+          keyTakeaway: `आसपास सतर्क रहें और हेल्पलाइन नंबर पास रखें।`,
+          badge: `सामुदायिक सुरक्षा सलाह`
+        }
+      },
+      economy_costs: {
+        en: {
+          opinion: `This price change or economic news may directly impact your monthly grocery bill, fuel expenses, or savings. It is a good time to review your immediate weekly budget.`,
+          keyTakeaway: `Keep an eye on household expenses and fuel costs this week.`,
+          badge: `Household Budget Tip`
+        },
+        ta: {
+          opinion: `இந்த விலை மாற்றம் உங்கள் மாதாந்திர மளிகை, காய்கறி அல்லது எரிபொருள் செலவுகளை பாதிக்கலாம். வரவிருக்கும் வாரத்திற்கான வரவு செலவு திட்டத்தை சரிபார்க்கவும்.`,
+          keyTakeaway: `இந்த வாரம் குடும்ப செலவுகள் மற்றும் எரிபொருள் செலவுகளை கவனியுங்கள்.`,
+          badge: `குடும்ப வரவு செலவு ஆலோசனை`
+        },
+        hi: {
+          opinion: `इस मूल्य परिवर्तन से आपके मासिक राशन, पेट्रोल-डीजल या रसोई के बजट पर असर पड़ सकता है। इस सप्ताह अपने खर्चों पर ध्यान दें।`,
+          keyTakeaway: `इस सप्ताह घरेलू बजट और यात्रा खर्च पर नजर रखें।`,
+          badge: `घरेलू बजट सलाह`
+        }
+      },
+      general: {
+        en: {
+          opinion: `An important local or national update. Knowing this helps you make informed choices about your work, travel, and community conversations today.`,
+          keyTakeaway: `Stay informed with verified local facts.`,
+          badge: `Citizen Insight`
+        },
+        ta: {
+          opinion: `இது உங்கள் பகுதி அல்லது நாட்டின் முக்கியமான நடப்பு நிகழ்வு. இந்த தகவலை தெரிந்து கொள்வது உங்கள் அன்றாட முடிவுகளுக்கு உதவும்.`,
+          keyTakeaway: `உண்மையான உள்ளூர் தகவல்களை அறிந்து விழிப்புடன் இருங்கள்.`,
+          badge: `மக்களுக்கான தகவல்`
+        },
+        hi: {
+          opinion: `यह आपके क्षेत्र का एक महत्वपूर्ण समाचार है। इससे अवगत रहने से आपको अपने दैनिक निर्णय लेने में मदद मिलेगी।`,
+          keyTakeaway: `सटीक स्थानीय जानकारी से अपडेट रहें।`,
+          badge: `नागरिक सूचना`
+        }
+      }
+    };
+
+    const selDict = citizenPerspectives[theme] || citizenPerspectives.general;
+    const localized = selDict[lang] || selDict.en;
+    return {
+      persona: 'Casual user',
+      badge: localized.badge,
+      impactLevel: 'COMMUNITY',
+      opinion: localized.opinion,
+      keyTakeaway: localized.keyTakeaway,
+      speechText: `${localized.badge}: ${localized.opinion} குறிப்பு: ${localized.keyTakeaway}`
+    };
+  }
+
+  // 3. ACCESSIBILITY MODE (Simple Spoken Guidance)
+  const simpleGuide = explainNews(title, description, language);
+  return {
+    persona: 'Accessibility mode',
+    badge: lang === 'ta' ? 'எளிய குரல் விளக்கம்' : (lang === 'hi' ? 'सरल आवाज सलाह' : 'Simple Voice Guidance'),
+    impactLevel: 'CLEAR',
+    opinion: simpleGuide.explanation,
+    keyTakeaway: simpleGuide.impact,
+    speechText: simpleGuide.simpleText
+  };
+}

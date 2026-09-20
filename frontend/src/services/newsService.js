@@ -172,6 +172,62 @@ export async function fetchNewsExplanation(title, description, language = 'en') 
 }
 
 /**
+ * Fetch personalized AI-based opinion tailored to the active persona
+ */
+export async function fetchPersonalizedOpinion(title, description, persona = 'Casual user', language = 'en') {
+  const endpoints = [
+    `${API_BASE}/news/opinion`,
+    'http://localhost:5000/api/news/opinion',
+    '/api/news/opinion'
+  ];
+
+  for (const ep of endpoints) {
+    try {
+      const res = await fetch(ep, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, description, persona, language })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return data;
+      }
+    } catch (e) {
+      // try next
+    }
+  }
+
+  // Fallback client-side opinion
+  const isAnalyst = persona === 'Analyst';
+  const isTa = language === 'ta';
+  const isHi = language === 'hi';
+
+  let badge = isAnalyst ? 'Strategic Intel Assessment' : (persona === 'Accessibility mode' ? 'Voice Guidance' : 'Citizen AI Perspective');
+  if (isTa) badge = isAnalyst ? 'மூலோபாய உளவு மதிப்பீடு' : 'மக்களுக்கான பார்வை';
+  if (isHi) badge = isAnalyst ? 'रणनीतिक खुफिया आकलन' : 'नागरिक एआई राय';
+
+  let opinion = isAnalyst
+    ? 'Intelligence telemetry indicates regional policy and civic transit implications. Local administrative impact expected.'
+    : (isTa 
+        ? 'இந்தப் புதிய நிகழ்வு உங்கள் அன்றாட வாழ்க்கை, பயணம் மற்றும் குடும்பச் செலவுகளை பாதிக்கலாம்.' 
+        : (isHi ? 'यह घटनाक्रम आपकी दैनिक दिनचर्या और यात्रा को प्रभावित कर सकता है।' : 'This news may impact local commute, transit routes, or neighborhood activities.'));
+
+  let keyTakeaway = isAnalyst
+    ? 'High monitoring priority; supply & transit latency possible.'
+    : (isTa ? 'முன்கூட்டியே திட்டமிட்டு விழிப்புடன் செயல்படவும்.' : 'Stay informed and plan daily travel accordingly.');
+
+  return {
+    success: true,
+    title,
+    persona,
+    badge,
+    opinion,
+    keyTakeaway,
+    speechText: `${badge}: ${opinion} ${keyTakeaway}`
+  };
+}
+
+/**
  * Fetch active alerts from backend or Supabase
  */
 export async function fetchActiveAlerts(country = null) {

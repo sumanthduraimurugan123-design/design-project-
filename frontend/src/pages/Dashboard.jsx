@@ -21,10 +21,34 @@ import {
   triggerAudioAlert,
   requestNotificationPermission 
 } from '../services/voiceService';
+import { 
+  MapPin, 
+  Navigation, 
+  Search, 
+  Building2, 
+  Globe2, 
+  Compass, 
+  Sparkles, 
+  X 
+} from 'lucide-react';
+
+const CHENNAI_NEIGHBORHOODS = [
+  { id: 'all_chennai', label: 'Chennai Metro', loc: 'chennai', icon: '🏙️' },
+  { id: 'velachery', label: 'Velachery', loc: 'velachery', icon: '📍' },
+  { id: 'tnagar', label: 'T. Nagar', loc: 't nagar', icon: '🛍️' },
+  { id: 'annanagar', label: 'Anna Nagar', loc: 'anna nagar', icon: '🌳' },
+  { id: 'adyar', label: 'Adyar', loc: 'adyar', icon: '🌊' },
+  { id: 'tambaram', label: 'Tambaram', loc: 'tambaram', icon: '🚆' },
+  { id: 'mylapore', label: 'Mylapore', loc: 'mylapore', icon: '🛕' },
+  { id: 'omr', label: 'OMR / IT Corridor', loc: 'omr', icon: '💻' },
+  { id: 'guindy', label: 'Guindy', loc: 'guindy', icon: '🏭' },
+];
 
 export default function Dashboard() {
   // Core Dashboard State
   const [selectedCountry, setSelectedCountry] = useState('global');
+  const [selectedLocation, setSelectedLocation] = useState(null); // 'velachery', 't nagar', etc.
+  const [customLocationInput, setCustomLocationInput] = useState('');
   const [activeTopic, setActiveTopic] = useState('all');
   const [news, setNews] = useState([]);
   const [alerts, setAlerts] = useState([]);
@@ -78,12 +102,14 @@ export default function Dashboard() {
   }, [isLargeText]);
 
   // Load news and alerts
-  const loadTelemetryData = useCallback(async (force = false) => {
+  const loadTelemetryData = useCallback(async (force = false, overrideCountry = null, overrideLocation = undefined) => {
     setIsRefreshing(true);
     try {
+      const locToUse = overrideLocation !== undefined ? overrideLocation : selectedLocation;
+      const countryToUse = overrideCountry || selectedCountry;
       const [fetchedNews, fetchedAlerts] = await Promise.all([
-        fetchNewsStream(selectedCountry, activeTopic, force, null, currentLanguage),
-        fetchActiveAlerts(selectedCountry)
+        fetchNewsStream(countryToUse, activeTopic, force, locToUse, currentLanguage),
+        fetchActiveAlerts(countryToUse)
       ]);
 
       setNews(fetchedNews);
@@ -107,17 +133,19 @@ export default function Dashboard() {
     } finally {
       setIsRefreshing(false);
     }
-  }, [selectedCountry, activeTopic, currentLanguage, isAudioAlertsEnabled]);
+  }, [selectedCountry, selectedLocation, activeTopic, currentLanguage, isAudioAlertsEnabled]);
 
-  // Initial load and reload when country, topic, or language changes
+  // Initial load and reload when country, location, topic, or language changes
   useEffect(() => {
     loadTelemetryData(false);
     setCountdown(30);
-    logTelemetryAction(`Sector focus switched to: ${selectedCountry.toUpperCase()}`, persona, { 
+    const focusLabel = selectedLocation ? `${selectedLocation.toUpperCase()} (${selectedCountry.toUpperCase()})` : selectedCountry.toUpperCase();
+    logTelemetryAction(`Sector focus switched to: ${focusLabel}`, persona, { 
       topic: activeTopic,
-      language: currentLanguage 
+      language: currentLanguage,
+      location: selectedLocation 
     });
-  }, [selectedCountry, activeTopic, currentLanguage, loadTelemetryData]);
+  }, [selectedCountry, selectedLocation, activeTopic, currentLanguage, loadTelemetryData]);
 
   // Real-time 30-second countdown loop
   useEffect(() => {
@@ -147,11 +175,33 @@ export default function Dashboard() {
     loadTelemetryData(true);
   };
 
-  // Handle Country/Location Selection
+  // Handle Country/Location Selection from 3D Globe or Navigation
   const handleSelectCountry = (countryId) => {
     setSelectedCountry(countryId);
+    setSelectedLocation(null);
     stopSpeaking();
     setIsSpeaking(false);
+    loadTelemetryData(true, countryId, null);
+  };
+
+  // Handle Specific Locality / Micro-area Selection (e.g. Velachery, T. Nagar)
+  const handleSelectLocation = (locName) => {
+    playEarcon('click');
+    setSelectedLocation(locName);
+    setActiveTopic('all');
+    if (locName) {
+      setSelectedCountry('india');
+    }
+    stopSpeaking();
+    setIsSpeaking(false);
+    loadTelemetryData(true, locName ? 'india' : selectedCountry, locName || null);
+  };
+
+  // Handle Custom Locality Search
+  const handleCustomLocSubmit = (e) => {
+    e.preventDefault();
+    if (!customLocationInput.trim()) return;
+    handleSelectLocation(customLocationInput.trim().toLowerCase());
   };
 
   // Auto-Detect GPS Location
@@ -165,15 +215,20 @@ export default function Dashboard() {
     const loc = await detectUserLocation();
     setDetectedLocationLabel(loc.label);
 
-    const target = loc.city || loc.country || 'chennai';
-    setSelectedCountry(target);
+    const targetLoc = loc.locality || loc.city || 'velachery';
+    const targetCountry = loc.country || 'india';
 
-    let confirmMsg = `Location detected as ${loc.label}. Loading your local news now.`;
-    if (currentLanguage === 'ta') confirmMsg = `உங்கள் பகுதி ${loc.label}. உள்ளூர் செய்திகளை ஏற்றுகிறேன்.`;
-    if (currentLanguage === 'hi') confirmMsg = `आपकी लोकेशन ${loc.label} मिली। स्थानीय समाचार लोड हो रहे हैं।`;
+    setSelectedCountry(targetCountry);
+    setSelectedLocation(targetLoc);
+    setActiveTopic('all');
+
+    let confirmMsg = `Location detected as ${loc.label}. Loading local dispatches for ${targetLoc}.`;
+    if (currentLanguage === 'ta') confirmMsg = `உங்கள் பகுதி ${loc.label}. ${targetLoc} பகுதிக்கான செய்திகள் ஏற்றப்படுகின்றன.`;
+    if (currentLanguage === 'hi') confirmMsg = `आपकी लोकेशन ${loc.label} मिली। ${targetLoc} के स्थानीय समाचार लोड हो रहे हैं।`;
     
     speakInLanguage(confirmMsg, { language: currentLanguage });
-    logTelemetryAction(`GPS auto-personalization: ${target}`, persona);
+    logTelemetryAction(`GPS auto-personalization: ${loc.label}`, persona);
+    loadTelemetryData(true, targetCountry, targetLoc);
   };
 
   // Voice Summary Synthesis
@@ -184,11 +239,13 @@ export default function Dashboard() {
       return;
     }
 
+    const activeLabel = selectedLocation ? `${selectedLocation.toUpperCase()} (CHENNAI)` : selectedCountry.toUpperCase();
+
     if (!news || news.length === 0) {
       speakInLanguage(
         currentLanguage === 'ta' 
-          ? 'செய்திகள் எதுவும் கிடைக்கவில்லை. தயவுசெய்து புதுப்பிக்கவும்.' 
-          : `No dispatches available for ${selectedCountry}. Please refresh.`,
+          ? `${activeLabel} பகுதியில் செய்திகள் எதுவும் கிடைக்கவில்லை. தயவுசெய்து புதுப்பிக்கவும்.` 
+          : `No dispatches available for ${activeLabel}. Please refresh.`,
         { language: currentLanguage }
       );
       return;
@@ -201,14 +258,14 @@ export default function Dashboard() {
       ? `Attention: There are ${criticalAlertsCount} critical alerts active in this sector.` 
       : 'No critical alerts active.';
 
-    let fullBrief = `Planetary Telemetry Briefing for sector ${selectedCountry.toUpperCase()}. ${alertSummary} Here are the top verified headlines. ${topStories} Briefing completed.`;
+    let fullBrief = `Planetary Telemetry Briefing for sector ${activeLabel}. ${alertSummary} Here are the top verified headlines. ${topStories} Briefing completed.`;
     
     if (currentLanguage === 'ta') {
       const taStories = news.slice(0, 3).map((n, i) => `செய்தி ${i + 1}: ${n.title}.`).join(' ');
-      fullBrief = `${selectedCountry.toUpperCase()} பகுதிக்கான முக்கிய செய்தி அறிக்கை. ${criticalAlertsCount > 0 ? `${criticalAlertsCount} அவசர எச்சரிக்கைகள் உள்ளன.` : ''} முக்கிய செய்திகள்: ${taStories} அறிக்கை நிறைவடைந்தது.`;
+      fullBrief = `${activeLabel} பகுதிக்கான முக்கிய செய்தி அறிக்கை. ${criticalAlertsCount > 0 ? `${criticalAlertsCount} அவசர எச்சரிக்கைகள் உள்ளன.` : ''} முக்கிய செய்திகள்: ${taStories} அறிக்கை நிறைவடைந்தது.`;
     } else if (currentLanguage === 'hi') {
       const hiStories = news.slice(0, 3).map((n, i) => `खबर ${i + 1}: ${n.title}.`).join(' ');
-      fullBrief = `${selectedCountry.toUpperCase()} क्षेत्र के मुख्य समाचार। ${criticalAlertsCount > 0 ? `${criticalAlertsCount} महत्वपूर्ण अलर्ट हैं।` : ''} मुख्य खबरें: ${hiStories} समाचार समाप्त हुए।`;
+      fullBrief = `${activeLabel} क्षेत्र के मुख्य समाचार। ${criticalAlertsCount > 0 ? `${criticalAlertsCount} महत्वपूर्ण अलर्ट हैं।` : ''} मुख्य खबरें: ${hiStories} समाचार समाप्त हुए।`;
     }
 
     speakInLanguage(fullBrief, {
@@ -269,7 +326,12 @@ export default function Dashboard() {
       setIsLargeText(true);
       setIsCognitiveSimple(true);
       setIsEasyMode(true);
+    } else {
+      if (isEasyMode && persona === 'Accessibility mode') {
+        setIsEasyMode(false);
+      }
     }
+    logTelemetryAction(`Persona switched to: ${newPersona}`, newPersona);
   };
 
   // Handle Easy Mode Toggle
@@ -292,7 +354,10 @@ export default function Dashboard() {
         <EasyModeView
           news={news}
           alerts={alerts}
-          selectedLocation={selectedCountry}
+          isLoading={isRefreshing}
+          selectedLocation={selectedLocation}
+          selectedCountry={selectedCountry}
+          onSelectLocation={handleSelectLocation}
           currentLanguage={currentLanguage}
           onSelectLanguage={setCurrentLanguage}
           onOpenVoiceModal={() => setIsVoiceModalOpen(true)}
@@ -380,15 +445,137 @@ export default function Dashboard() {
 
             </div>
 
-            {/* Row 3: Live Verified Real-time News Stream */}
+            {/* Row 3: Hyper-Local Neighborhood Telemetry Focus Strip */}
+            <div className="bg-wire-surface border border-wire-border p-3.5 shadow-md">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-wire-border/60">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="font-mono text-xs font-bold text-wire-fg tracking-wide uppercase flex items-center gap-1.5">
+                    <Compass className="w-3.5 h-3.5 text-wire-amber" />
+                    Hyper-Local Telemetry & Neighborhood Focus
+                  </span>
+                  {selectedLocation ? (
+                    <span className="px-2 py-0.5 bg-wire-amber text-wire-base font-mono text-[11px] font-bold rounded-sm uppercase flex items-center gap-1">
+                      <MapPin className="w-3 h-3" />
+                      {selectedLocation} (Chennai / India)
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 bg-slate-900 border border-slate-700 font-mono text-[11px] text-slate-300 rounded-sm uppercase">
+                      {selectedCountry === 'india' ? '🇮🇳 All India' : (selectedCountry === 'global' ? '🌐 Worldwide' : selectedCountry.toUpperCase())}
+                    </span>
+                  )}
+                </div>
+
+                {/* GPS Auto-Detect Button & Reset Button */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleDetectLocation}
+                    className="px-3 py-1.5 bg-slate-900 border border-slate-700 hover:border-wire-amber text-slate-200 hover:text-wire-amber font-mono text-xs font-semibold rounded-sm transition-all flex items-center gap-1.5"
+                    title="Detect precise GPS neighborhood"
+                  >
+                    <Navigation className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>GPS Auto-Locate</span>
+                    <span className="text-[10px] text-wire-subtle">({detectedLocationLabel})</span>
+                  </button>
+
+                  {selectedLocation && (
+                    <button
+                      onClick={() => handleSelectLocation(null)}
+                      className="px-2 py-1.5 text-xs font-mono text-wire-subtle hover:text-wire-red border border-wire-border hover:border-wire-red/40 rounded-sm transition-colors flex items-center gap-1"
+                      title="Reset to global / country view"
+                    >
+                      <X className="w-3 h-3" />
+                      <span>Clear Local Focus</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Neighborhood Quick Chips & Custom Search */}
+              <div className="mt-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                {/* Chennai Neighborhood Quick Chips */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-mono text-[11px] text-wire-subtle mr-1">Quick Focus:</span>
+                  
+                  <button
+                    onClick={() => handleSelectCountry('global')}
+                    className={`px-2.5 py-1 text-xs font-mono rounded-sm border transition-all ${
+                      !selectedLocation && selectedCountry === 'global'
+                        ? 'bg-wire-amber text-wire-base font-bold border-wire-amber shadow-sm'
+                        : 'bg-wire-base text-wire-subtle border-wire-border hover:text-white hover:border-slate-600'
+                    }`}
+                  >
+                    🌐 Worldwide
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setSelectedCountry('india');
+                      setSelectedLocation(null);
+                      loadTelemetryData(true, 'india', null);
+                    }}
+                    className={`px-2.5 py-1 text-xs font-mono rounded-sm border transition-all ${
+                      !selectedLocation && selectedCountry === 'india'
+                        ? 'bg-wire-amber text-wire-base font-bold border-wire-amber shadow-sm'
+                        : 'bg-wire-base text-wire-subtle border-wire-border hover:text-white hover:border-slate-600'
+                    }`}
+                  >
+                    🇮🇳 India
+                  </button>
+
+                  {CHENNAI_NEIGHBORHOODS.map(hood => {
+                    const isSelected = selectedLocation === hood.loc;
+                    return (
+                      <button
+                        key={hood.id}
+                        onClick={() => handleSelectLocation(hood.loc)}
+                        className={`px-2.5 py-1 text-xs font-mono rounded-sm border transition-all flex items-center gap-1 ${
+                          isSelected
+                            ? 'bg-wire-amber text-wire-base font-bold border-wire-amber shadow-sm scale-105'
+                            : 'bg-wire-base text-wire-subtle border-wire-border hover:text-white hover:border-slate-600'
+                        }`}
+                      >
+                        <span>{hood.icon}</span>
+                        <span>{hood.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Custom Neighborhood / Area search form */}
+                <form onSubmit={handleCustomLocSubmit} className="flex items-center gap-1 min-w-[240px]">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={customLocationInput}
+                      onChange={(e) => setCustomLocationInput(e.target.value)}
+                      placeholder="Type area (e.g. Madipakkam)..."
+                      className="w-full bg-slate-950 border border-wire-border px-2.5 py-1 text-xs font-mono text-wire-fg placeholder:text-wire-subtle focus:outline-none focus:border-wire-amber rounded-sm"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="px-3 py-1 bg-wire-raised hover:bg-wire-amber hover:text-wire-base border border-wire-border text-wire-fg font-mono text-xs font-semibold rounded-sm transition-all flex items-center gap-1"
+                  >
+                    <Search className="w-3 h-3" />
+                    <span>Scan</span>
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            {/* Row 4: Live Verified Real-time News Stream */}
             <div className="w-full">
               <NewsPanel
                 news={news}
                 isLoading={isRefreshing && news.length === 0}
                 selectedCountry={selectedCountry}
+                selectedLocation={selectedLocation}
+                onSelectLocation={handleSelectLocation}
                 activeTopic={activeTopic}
                 onSelectTopic={setActiveTopic}
                 persona={persona}
+                onSelectPersona={handlePersonaChange}
                 isCognitiveSimple={isCognitiveSimple}
                 currentLanguage={currentLanguage}
                 lastUpdatedTime={lastUpdatedTime}
@@ -435,8 +622,13 @@ export default function Dashboard() {
         currentLanguage={currentLanguage}
         onSelectLanguage={setCurrentLanguage}
         onLocationChange={(loc) => {
-          setSelectedCountry(loc);
-          loadTelemetryData(true);
+          const locLower = (loc || '').toLowerCase().trim();
+          const chennaiAreas = ['velachery', 't nagar', 'tnagar', 'adyar', 'anna nagar', 'tambaram', 'mylapore', 'guindy', 'omr', 'chennai', 'madipakkam', 'porur', 'thiruvanmiyur'];
+          if (chennaiAreas.includes(locLower)) {
+            handleSelectLocation(locLower === 'tnagar' ? 't nagar' : locLower);
+          } else {
+            handleSelectCountry(locLower);
+          }
         }}
         onStartRadio={handleStartRadio}
         onReadAlerts={handleReadAlerts}

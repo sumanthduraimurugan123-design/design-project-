@@ -1,7 +1,7 @@
 import express from 'express';
 import { fetchLiveNews, fetchWorldwideNewsCategorized, getLastSyncTimestamp, COUNTRY_LEXICON } from '../services/newsService.js';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient.js';
-import { explainNews } from '../services/newsExplainer.js';
+import { explainNews, generatePersonalizedOpinion } from '../services/newsExplainer.js';
 
 const router = express.Router();
 
@@ -63,8 +63,51 @@ router.post('/explain', (req, res) => {
 });
 
 /**
+ * POST /api/news/opinion
+ * Returns personalized AI-based opinion tailored to persona (Analyst vs Casual user vs Accessibility mode)
+ */
+router.post('/opinion', (req, res) => {
+  try {
+    const { title, description, persona, language } = req.body;
+    if (!title) {
+      return res.status(400).json({ error: 'title is required' });
+    }
+    const opinionData = generatePersonalizedOpinion(title, description, persona || 'Casual user', language || 'en');
+    res.json({
+      success: true,
+      title,
+      ...opinionData
+    });
+  } catch (err) {
+    console.error('❌ [News Opinion Error]:', err);
+    res.status(500).json({ error: 'Failed to generate personalized opinion', details: err.message });
+  }
+});
+
+/**
+ * GET /api/news/opinion
+ */
+router.get('/opinion', (req, res) => {
+  try {
+    const { title, description, persona, language } = req.query;
+    if (!title) {
+      return res.status(400).json({ error: 'title is required' });
+    }
+    const opinionData = generatePersonalizedOpinion(title, description, persona || 'Casual user', language || 'en');
+    res.json({
+      success: true,
+      title,
+      ...opinionData
+    });
+  } catch (err) {
+    console.error('❌ [News Opinion Error]:', err);
+    res.status(500).json({ error: 'Failed to generate personalized opinion', details: err.message });
+  }
+});
+
+/**
  * GET /api/news
- * Query parameters: country (default: 'global'), topic (default: 'all'), location (optional city), language ('en', 'hi', 'ta'), refresh (boolean)
+ * Query parameters: country (default: 'global'), topic (default: 'all'), location (optional city/area), language ('en', 'hi', 'ta'), refresh (boolean)
  */
 router.get('/', async (req, res) => {
   res.set({
@@ -74,13 +117,13 @@ router.get('/', async (req, res) => {
   });
 
   try {
-    const country = (req.query.country || req.query.location || 'global').toLowerCase();
-    const location = req.query.location ? req.query.location.toLowerCase() : null;
+    const location = req.query.location ? req.query.location.toLowerCase().trim() : null;
+    const country = (location || req.query.country || 'global').toLowerCase().trim();
     const language = (req.query.language || 'en').toLowerCase();
     const topic = req.query.topic || 'all';
     const forceRefresh = req.query.refresh === 'true';
 
-    // If Supabase is connected and not forcing refresh, try to read from Supabase first
+    // If Supabase is connected and not forcing refresh and no micro-location filter, try to read from Supabase first
     if (isSupabaseConfigured && supabase && !forceRefresh && !location) {
       let query = supabase
         .from('news')

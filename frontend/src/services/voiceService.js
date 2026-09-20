@@ -308,15 +308,38 @@ export function stopVoiceRecognition() {
 export function parseVoiceCommand(transcript = '', currentLanguage = 'en') {
   const text = (transcript || '').toLowerCase().trim();
 
-  // Known location keywords
+  // Known location keywords including Chennai micro-neighborhoods
   const LOCATIONS = [
+    // Chennai Neighborhoods & Localities
+    { key: 'velachery', names: ['velachery', 'வேளச்சேரி', 'वेलाचेरी', 'వెలచేరి'] },
+    { key: 't nagar', names: ['t nagar', 't. nagar', 'tnagar', 'thyagaraya nagar', 'டி நகர்', 'தி நகர்', 'टी नगर', 'టి నగర్'] },
+    { key: 'adyar', names: ['adyar', 'அடையாறு', 'அடையார்', 'अड्यार'] },
+    { key: 'anna nagar', names: ['anna nagar', 'அண்ணா நகர்', 'अन्ना नगर'] },
+    { key: 'tambaram', names: ['tambaram', 'தாம்பரம்', 'तांबरम'] },
+    { key: 'mylapore', names: ['mylapore', 'மயிலாப்பூர்', 'மயிலாபூர்', 'मयिलापुर'] },
+    { key: 'guindy', names: ['guindy', 'கிண்டி', 'गिंडी'] },
+    { key: 'porur', names: ['porur', 'போரூர்', 'पोरूर'] },
+    { key: 'alwarpet', names: ['alwarpet', 'ஆழ்வார்பேட்டை', 'आलवारपेट'] },
+    { key: 'omr', names: ['omr', 'old mahabalipuram road', 'ஓஎம்ஆர்', 'ओएमआर'] },
+    { key: 'chromepet', names: ['chromepet', 'குரோம்பேட்டை', 'क्रोमपेट'] },
+    { key: 'saidapet', names: ['saidapet', 'சைதாப்பேட்டை', 'सैदापेट'] },
+    { key: 'egmore', names: ['egmore', 'எழும்பூர்', 'एग्मोर'] },
+    { key: 'triplicane', names: ['triplicane', 'திருவல்லிக்கேணி', 'ट्रिप्लिकेन'] },
+    { key: 'nungambakkam', names: ['nungambakkam', 'நுங்கம்பாக்கம்', 'नुंगमबक्कम'] },
+    { key: 'kodambakkam', names: ['kodambakkam', 'கோடம்பாக்கம்', 'कोडंबक्कम'] },
+    { key: 'madipakkam', names: ['madipakkam', 'மடிப்பாக்கம்', 'मडिपक्कम'] },
+    { key: 'perambur', names: ['perambur', 'பெரம்பூர்', 'पेरांबुर'] },
+    { key: 'avadi', names: ['avadi', 'ஆவடி', 'आवाडी'] },
+    { key: 'sholinganallur', names: ['sholinganallur', 'சோழிங்கநல்லூர்'] },
+    
+    // Metro Cities & Regions
     { key: 'chennai', names: ['chennai', 'madras', 'மெட்ராஸ்', 'சென்னை', 'चेन्नई', 'చెన్నై', 'চেন্নাই'] },
-    { key: 'delhi', names: ['delhi', 'new delhi', 'டெல்லி', 'दिल्ली', 'ఢిల్లీ', 'দিল্লি', 'दिल्ली'] },
+    { key: 'delhi', names: ['delhi', 'new delhi', 'டெல்லி', 'दिल्ली', 'ఢిల్లీ', 'দিল্লি'] },
     { key: 'mumbai', names: ['mumbai', 'bombay', 'மும்பை', 'मुंबई', 'ముంబై', 'মুম্বই'] },
     { key: 'bengaluru', names: ['bengaluru', 'bangalore', 'பெங்களூரு', 'बैंगलोर', 'బెంగుళూరు', 'বেঙ্গালুরু'] },
     { key: 'india', names: ['india', 'indian', 'இந்தியா', 'भारत', 'हिन्दुस्तान', 'భారతదేశం', 'ভারত'] },
     { key: 'tamil nadu', names: ['tamil nadu', 'தமிழ்நாடு', 'तमिलनाडु', 'తమిళనాడు', 'তামিলনাড়ু'] },
-    { key: 'hyderabad', names: ['hyderabad', 'హైదరాబాద్', 'ஹைதராபாத்', 'हैदराबाद'] },
+    { key: 'hyderabad', names: ['hyderabad', 'ஹைதராபாத்', 'హైదరాబాద్', 'हैदराबाद'] },
     { key: 'kolkata', names: ['kolkata', 'calcutta', 'কলকাতা', 'கொல்கத்தா', 'कोलकाता'] },
     { key: 'pune', names: ['pune', 'पुणे', 'புனே', 'పూణే'] },
     { key: 'ukraine', names: ['ukraine', 'யுக்ரேன்', 'यूक्रेन'] },
@@ -595,6 +618,22 @@ export function parseVoiceCommand(transcript = '', currentLanguage = 'en') {
     }
   }
 
+  // 11. Generic natural language location extraction: e.g. "I am from X", "Show news for X", "Local news for X"
+  const fromMatch = text.match(/(?:i am from|i'm from|live in|stay in|news from|news for|news in|local news for|local news in|நான்|இருந்து)\s+([a-z0-9\s\.\-]+)/i);
+  if (fromMatch && fromMatch[1]) {
+    const extractedLoc = fromMatch[1].replace(/news|local|show|feed|please|the|me/gi, '').trim();
+    if (extractedLoc.length >= 2) {
+      let reply = `Location set to ${extractedLoc.toUpperCase()}. Fetching your local news feed.`;
+      if (currentLanguage === 'ta') reply = `${extractedLoc.toUpperCase()} பகுதி தேர்ந்தெடுக்கப்பட்டது. உள்ளூர் செய்திகளை ஏற்றுகிறேன்.`;
+      if (currentLanguage === 'hi') reply = `${extractedLoc.toUpperCase()} क्षेत्र चुना गया। समाचार लोड हो रहे हैं।`;
+      return {
+        intent: 'set_location',
+        location: extractedLoc,
+        reply
+      };
+    }
+  }
+
   // Fallback search or query
   let reply = `Searching news for "${transcript}".`;
   if (currentLanguage === 'ta') reply = `"${transcript}" குறித்து தேடுகிறேன்.`;
@@ -758,12 +797,91 @@ export const globalRadioEngine = new RadioEngine();
 // ============================================================================
 
 /**
- * Detect user's current city and nation via browser Geolocation
+ * Detect user's current city and nation via browser Geolocation with IP fallback
  */
 export async function detectUserLocation() {
+  const parseGeoData = (data, coords = {}) => {
+    let rawLoc = (data.locality || '').toLowerCase().trim();
+    let rawCity = (data.city || data.principalSubdivision || 'chennai').toLowerCase().trim();
+    const country = (data.countryName || 'India').toLowerCase().trim();
+
+    // Check administrative & informative entries for specific Chennai neighborhood names
+    const allNames = [rawLoc, rawCity];
+    if (Array.isArray(data.localityInfo?.administrative)) {
+      for (const a of data.localityInfo.administrative) if (a.name) allNames.push(a.name.toLowerCase());
+    }
+    if (Array.isArray(data.localityInfo?.informative)) {
+      for (const a of data.localityInfo.informative) if (a.name) allNames.push(a.name.toLowerCase());
+    }
+
+    const KNOWN_AREAS = [
+      'velachery', 'tnagar', 't nagar', 'adyar', 'anna nagar', 'tambaram', 'mylapore',
+      'guindy', 'porur', 'alwarpet', 'omr', 'chromepet', 'triplicane', 'royapettah',
+      'kodambakkam', 'egmore', 'nungambakkam', 'madipakkam', 'sholinganallur', 'perambur',
+      'avadi', 'pallavaram', 'thiruvanmiyur', 'saidapet', 'besant nagar', 'ambattur',
+      'kolathur', 'mogappair', 'medavakkam', 'pallikaranai', 'tharamani', 'kotturpuram',
+      'vadapalani', 'poonamallee', 'chengalpattu', 'thiruvallur', 'kanchipuram'
+    ];
+
+    let detectedArea = null;
+    for (const name of allNames) {
+      for (const area of KNOWN_AREAS) {
+        if (name.includes(area)) {
+          detectedArea = area;
+          break;
+        }
+      }
+      if (detectedArea) break;
+    }
+
+    // Clean administrative noise
+    const cleanLoc = (detectedArea || rawLoc || rawCity || 'chennai')
+      .replace(/\s*(district|taluk|division|municipality|corporation)\s*/gi, '')
+      .trim();
+
+    const locality = cleanLoc || 'chennai';
+    const city = 'chennai';
+    const primaryArea = locality;
+    const label = locality !== 'chennai' 
+      ? `${locality.toUpperCase()}, Chennai` 
+      : `${data.city || 'Chennai'}, ${data.countryName || 'India'}`;
+
+    return {
+      success: true,
+      locality,
+      city,
+      country,
+      primaryArea,
+      latitude: coords.latitude || data.latitude,
+      longitude: coords.longitude || data.longitude,
+      label
+    };
+  };
+
   return new Promise((resolve) => {
+    const fallbackIpLocate = async () => {
+      try {
+        const res = await fetch('https://api.bigdatacloud.net/data/reverse-geocode-client?localityLanguage=en');
+        if (res.ok) {
+          const data = await res.json();
+          resolve(parseGeoData(data));
+          return;
+        }
+      } catch (e) {
+        console.warn('IP-based reverse geocode fallback failed:', e);
+      }
+      resolve({
+        success: true,
+        locality: 'chennai',
+        city: 'chennai',
+        country: 'india',
+        primaryArea: 'chennai',
+        label: 'Chennai Metro, India'
+      });
+    };
+
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      resolve({ success: false, city: 'chennai', country: 'india', label: 'Chennai, India (Default)' });
+      fallbackIpLocate();
       return;
     }
 
@@ -771,45 +889,24 @@ export async function detectUserLocation() {
       async (pos) => {
         const { latitude, longitude } = pos.coords;
         try {
-          // Free reverse geocode from bigdatacloud or openstreetmap
           const res = await fetch(
             `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
           );
           if (res.ok) {
             const data = await res.json();
-            const city = (data.city || data.locality || data.principalSubdivision || 'chennai').toLowerCase();
-            const country = (data.countryName || 'India').toLowerCase();
-            resolve({
-              success: true,
-              city,
-              country,
-              latitude,
-              longitude,
-              label: `${data.city || data.locality || 'Local'}, ${data.countryName || 'India'}`
-            });
+            resolve(parseGeoData(data, { latitude, longitude }));
             return;
           }
         } catch (e) {
-          console.warn('Reverse geocode lookup error:', e);
+          console.warn('GPS reverse geocode lookup error:', e);
         }
-
-        resolve({
-          success: true,
-          city: 'chennai',
-          country: 'india',
-          label: 'Chennai, India'
-        });
+        fallbackIpLocate();
       },
       (err) => {
-        console.warn('Geolocation denied or failed:', err.message);
-        resolve({
-          success: false,
-          city: 'chennai',
-          country: 'india',
-          label: 'Chennai, India'
-        });
+        console.warn('Geolocation permission denied or timed out, using IP geo-location fallback:', err.message);
+        fallbackIpLocate();
       },
-      { timeout: 8000, enableHighAccuracy: false }
+      { timeout: 5000, enableHighAccuracy: false }
     );
   });
 }

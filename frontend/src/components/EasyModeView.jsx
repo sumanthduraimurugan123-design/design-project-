@@ -129,10 +129,25 @@ const PICTORIAL_CATEGORIES = [
   }
 ];
 
+const EASY_NEIGHBORHOODS = [
+  { id: 'chennai', label: { en: 'Chennai Metro', ta: 'சென்னை', hi: 'चेन्नई' }, loc: 'chennai', icon: '🏙️' },
+  { id: 'velachery', label: { en: 'Velachery', ta: 'வேளச்சேரி', hi: 'वेलाचेरी' }, loc: 'velachery', icon: '📍' },
+  { id: 'tnagar', label: { en: 'T. Nagar', ta: 'தி. நகர்', hi: 'टी. नगर' }, loc: 't nagar', icon: '🛍️' },
+  { id: 'annanagar', label: { en: 'Anna Nagar', ta: 'அண்ணா நகர்', hi: 'अन्ना नगर' }, loc: 'anna nagar', icon: '🌳' },
+  { id: 'adyar', label: { en: 'Adyar', ta: 'அடையாறு', hi: 'அड्यार' }, loc: 'adyar', icon: '🌊' },
+  { id: 'tambaram', label: { en: 'Tambaram', ta: 'தாம்பரம்', hi: 'तांबरम' }, loc: 'tambaram', icon: '🚆' },
+  { id: 'ambattur', label: { en: 'Ambattur', ta: 'அம்பத்தூர்', hi: 'अंबत्तूर' }, loc: 'ambattur', icon: '🏭' },
+  { id: 'mylapore', label: { en: 'Mylapore', ta: 'மயிலாப்பூர்', hi: 'मयिलापुर' }, loc: 'mylapore', icon: '🛕' },
+  { id: 'all_india', label: { en: 'All India', ta: 'இந்தியா', hi: 'अखिल भारत' }, loc: null, icon: '🇮🇳' },
+];
+
 export default function EasyModeView({
   news = [],
   alerts = [],
+  isLoading = false,
   selectedLocation = 'chennai',
+  selectedCountry = 'india',
+  onSelectLocation,
   currentLanguage = 'en',
   onSelectLanguage,
   onOpenVoiceModal,
@@ -164,6 +179,27 @@ export default function EasyModeView({
     setSelectedCategory(cat.id);
     const speech = cat.speakAnnouncement[currentLanguage] || cat.speakAnnouncement['en'];
     speakInLanguage(speech, { language: currentLanguage, rate: 1.0 });
+  };
+
+  // Handle GPS location detect click: resets category filter so local dispatches are shown immediately
+  const handleDetectClick = () => {
+    playEarcon('click');
+    setSelectedCategory('all');
+    if (onDetectLocation) onDetectLocation();
+  };
+
+  // Handle neighborhood direct tap
+  const handleSelectNeighborhood = (hood) => {
+    playEarcon('click');
+    setSelectedCategory('all');
+    if (onSelectLocation) {
+      onSelectLocation(hood.loc);
+    }
+    const locLabel = hood.label[currentLanguage] || hood.label.en;
+    let voiceMsg = `Showing news for ${locLabel}.`;
+    if (currentLanguage === 'ta') voiceMsg = `${locLabel} பகுதிக்கான செய்திகள் காட்டப்படுகின்றன.`;
+    if (currentLanguage === 'hi') voiceMsg = `${locLabel} के समाचार दिखाए जा रहे हैं।`;
+    speakInLanguage(voiceMsg, { language: currentLanguage });
   };
 
   // 1. Speak article headline & description
@@ -377,23 +413,67 @@ export default function EasyModeView({
 
         {/* 4. Detect Location (GPS) Button */}
         <button
-          onClick={() => {
-            playEarcon('click');
-            onDetectLocation();
-          }}
-          className="flex flex-col items-center justify-center p-4 bg-sky-500 hover:bg-sky-400 text-black rounded-lg shadow-lg active:scale-95 transition-all text-center border-2 border-sky-300 min-h-[96px]"
+          onClick={handleDetectClick}
+          disabled={isLoading}
+          className="flex flex-col items-center justify-center p-4 bg-sky-500 hover:bg-sky-400 text-black rounded-lg shadow-lg active:scale-95 transition-all text-center border-2 border-sky-300 min-h-[96px] disabled:opacity-60"
           aria-label="Auto detect my GPS location"
         >
-          <MapPin className="w-9 h-9 mb-1 stroke-[2.5]" />
+          <MapPin className={`w-9 h-9 mb-1 stroke-[2.5] ${isLoading ? 'animate-bounce' : ''}`} />
           <span className="text-base sm:text-lg font-black tracking-tight leading-none">
-            {t('MY LOCATION', 'என் ஊர்', 'मेरा स्थान', 'నా ప్రదేశం', 'আমার অবস্থান', 'माझे स्थान')}
+            {isLoading 
+              ? t('LOCATING...', 'கண்டறிகிறது...', 'खोज रहे हैं...', 'గుర్తిస్తోంది...', 'খোঁজা হচ্ছে...', 'शोधत आहे...') 
+              : t('MY LOCATION', 'என் ஊர்', 'मेरा स्थान', 'నా ప్రదేశం', 'আমার অবস্থান', 'माझे स्थान')}
           </span>
-          <span className="text-[11px] font-bold opacity-80 mt-1 capitalize">
-            {selectedLocation || 'Auto GPS'}
+          <span className="text-[11px] font-bold opacity-90 mt-1 capitalize truncate max-w-[140px]">
+            {selectedLocation ? `📍 ${selectedLocation}` : 'Auto GPS'}
           </span>
         </button>
 
       </section>
+
+      {/* LOCAL NEIGHBORHOOD QUICK TILES (1-Tap Direct Locality Selection) */}
+      <div className="mb-6 bg-zinc-900 border-2 border-sky-500/40 rounded-xl p-3 sm:p-4 shadow-lg">
+        <div className="flex items-center justify-between mb-2.5 px-1">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">📍</span>
+            <span className="font-mono text-xs font-bold text-sky-400 uppercase tracking-wider">
+              {t('CHENNAI LOCALITIES (1-TAP NEWS):', 'சென்னை பகுதிகள் (நேரடி செய்திகள்):', 'चेन्नई क्षेत्र (सीधे समाचार):', 'చెన్నై ప్రాంతాలు (వార్తలు):', 'চেন্নাই এলাকা (খবর):', 'चेन्नई परिसर (बातम्या):')}
+            </span>
+          </div>
+          {selectedLocation && (
+            <button
+              onClick={() => handleSelectNeighborhood({ loc: 'chennai', label: { en: 'Chennai' } })}
+              className="text-xs text-zinc-400 hover:text-yellow-400 font-bold underline"
+            >
+              {t('All Chennai', 'முழு சென்னை', 'सभी चेन्नई', 'అన్ని చెన్నై', 'সমগ্র চেন্নাই', 'संपूर्ण चेन्नई')}
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-1.5 sm:gap-2">
+          {EASY_NEIGHBORHOODS.map((hood) => {
+            const isHoodActive = (hood.loc === null && !selectedLocation) || (hood.loc && selectedLocation && selectedLocation.toLowerCase() === hood.loc.toLowerCase());
+            return (
+              <button
+                key={hood.id}
+                onClick={() => handleSelectNeighborhood(hood)}
+                className={`flex flex-col items-center justify-center p-2 rounded-lg border-2 text-center transition-all active:scale-95 min-h-[58px] ${
+                  isHoodActive
+                    ? 'bg-sky-500 text-black border-sky-300 font-black shadow-md scale-105'
+                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700 hover:border-zinc-500 font-medium'
+                }`}
+                title={hood.label.en}
+                aria-label={`Select ${hood.label[currentLanguage] || hood.label.en}`}
+              >
+                <span className="text-base mb-0.5">{hood.icon}</span>
+                <span className="text-[11px] leading-tight truncate w-full font-bold">
+                  {hood.label[currentLanguage] || hood.label.en}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {/* PICTORIAL CATEGORIES (Section 8: 🌾 Agriculture, 🌦 Weather, 🚨 Alerts, 🏥 Health) */}
       <div className="mb-6">
@@ -466,6 +546,27 @@ export default function EasyModeView({
         </button>
       </div>
 
+      {/* ACTIVE LOCATION STATUS BAR */}
+      {selectedLocation && (
+        <div className="mb-4 bg-sky-950/60 border-2 border-sky-500/50 rounded-lg px-4 py-2.5 flex items-center justify-between text-xs sm:text-sm">
+          <div className="flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-sky-400 shrink-0" />
+            <span className="text-zinc-300">
+              {t('Showing local dispatches for:', 'இதற்கான உள்ளூர் செய்திகள்:', 'स्थानीय समाचार:')}{' '}
+              <strong className="text-white uppercase font-bold text-sm tracking-wide bg-sky-900/60 px-2 py-0.5 rounded border border-sky-400/40">
+                {selectedLocation}
+              </strong>
+            </span>
+          </div>
+          <button
+            onClick={() => handleSelectNeighborhood({ loc: null, label: { en: 'All India' } })}
+            className="text-xs text-sky-300 hover:text-white underline font-semibold ml-2 shrink-0"
+          >
+            {t('Show All India', 'இந்தியா முழுவதும்', 'अखिल भारत')}
+          </button>
+        </div>
+      )}
+
       {/* SECTION HEADER: Live News Headlines */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
@@ -481,12 +582,78 @@ export default function EasyModeView({
 
       {/* SIMPLIFIED NEWS CARDS LIST */}
       <div className="space-y-4">
-        {filteredNews.length === 0 ? (
-          <div className="bg-zinc-900 border-2 border-dashed border-zinc-700 p-8 text-center rounded-lg">
-            <RefreshCw className="w-8 h-8 text-yellow-400 mx-auto mb-2 animate-spin" />
-            <p className="font-bold text-lg text-zinc-300">
-              {t('No dispatches in this category. Loading updates...', 'இந்த பிரிவில் செய்திகள் இல்லை. ஏற்றப்படுகிறது...', 'इस श्रेणी में समाचार लोड हो रहे हैं...', 'ఈ వర్గంలో వార్తలు లోడ్ అవుతున్నాయి...', 'এই বিভাগে খবর লোড হচ্ছে...', 'या वर्गातील बातम्या लोड होत आहेत...')}
+        {isLoading ? (
+          <div className="bg-zinc-900 border-2 border-dashed border-sky-500/50 p-8 text-center rounded-lg">
+            <RefreshCw className="w-9 h-9 text-sky-400 mx-auto mb-3 animate-spin" />
+            <p className="font-bold text-lg text-white">
+              {t(
+                `Loading verified news for ${selectedLocation || 'your location'}...`,
+                `${selectedLocation || 'உங்கள் பகுதி'} பகுதிக்கான செய்திகள் ஏற்றப்படுகின்றன...`,
+                `${selectedLocation || 'आपके स्थान'} के समाचार लोड हो रहे हैं...`,
+                `${selectedLocation || 'మీ ప్రాంతం'} వార్తలు లోడ్ అవుతున్నాయి...`,
+                `${selectedLocation || 'আপনার এলাকা'} খবর লোড হচ্ছে...`,
+                `${selectedLocation || 'तुमच्या परिसरातील'} बातम्या लोड होत आहेत...`
+              )}
             </p>
+            <p className="text-xs text-zinc-400 mt-1">
+              {t('Gathering real-time wire dispatches', 'நேரலை செய்திகள் திரட்டப்படுகின்றன', 'ताजा समाचार एकत्र किए जा रहे हैं', 'తాజా సమాచారం సేకరిస్తోంది', 'লাইভ খবর সংগ্রহ করা হচ্ছে', 'थेट बातम्या गोळा केल्या जात आहेत')}
+            </p>
+          </div>
+        ) : filteredNews.length === 0 ? (
+          <div className="bg-zinc-900 border-2 border-dashed border-zinc-700 p-8 text-center rounded-lg">
+            <p className="font-bold text-lg text-yellow-400 mb-2">
+              {news.length > 0
+                ? t(
+                    `No stories found matching "${activeCategoryObj.label[currentLanguage] || activeCategoryObj.label.en}" in ${selectedLocation || 'this area'}.`,
+                    `"${activeCategoryObj.label[currentLanguage] || activeCategoryObj.label.en}" பிரிவில் ${selectedLocation || 'இப்பகுதியில்'} செய்திகள் இல்லை.`,
+                    `"${activeCategoryObj.label[currentLanguage] || activeCategoryObj.label.en}" श्रेणी में कोई खबर नहीं मिली।`,
+                    `ఈ వర్గంలో వార్తలు లేవు.`,
+                    `এই বিভাগে খবর নেই।`,
+                    `या वर्गात बातम्या नाहीत.`
+                  )
+                : t(
+                    `No dispatches currently available for ${selectedLocation || 'this area'}.`,
+                    `${selectedLocation || 'இப்பகுதி'} குறித்து தற்போது செய்திகள் இல்லை.`,
+                    `${selectedLocation || 'इस क्षेत्र'} के लिए कोई समाचार उपलब्ध नहीं है।`,
+                    `ప్రస్తుతం వార్తలు అందుబాటులో లేవు.`,
+                    `বর্তমানে কোনো খবর পাওয়া যায়নি।`,
+                    `सध्या कोणतीही बातमी उपलब्ध नाही.`
+                  )}
+            </p>
+
+            {news.length > 0 ? (
+              <button
+                onClick={() => {
+                  playEarcon('click');
+                  setSelectedCategory('all');
+                }}
+                className="mt-3 px-5 py-2.5 bg-yellow-400 hover:bg-yellow-300 text-black font-bold text-sm rounded-lg shadow-md transition-all active:scale-95"
+              >
+                {t(
+                  `👉 Show All ${news.length} Stories for ${selectedLocation || 'this location'}`,
+                  `👉 ${selectedLocation || 'இப்பகுதியின்'} அனைத்து (${news.length}) செய்திகளையும் காட்டு`,
+                  `👉 ${selectedLocation || 'इस स्थान'} के सभी ${news.length} समाचार दिखाएं`,
+                  `👉 అన్ని ${news.length} వార్తలను చూపించు`,
+                  `👉 সব ${news.length} খবর দেখুন`,
+                  `👉 सर्व ${news.length} बातम्या दाखवा`
+                )}
+              </button>
+            ) : (
+              <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
+                <button
+                  onClick={() => handleSelectNeighborhood({ loc: 'chennai', label: { en: 'Chennai Metro' } })}
+                  className="px-4 py-2 bg-sky-500 hover:bg-sky-400 text-black font-bold text-xs rounded-md shadow transition-all"
+                >
+                  {t('View Chennai Metro News', 'சென்னை செய்திகள்', 'चेन्नई समाचार देखें', 'చెన్నై వార్తలు', 'চেন্নাই খবর', 'चेन्नई बातम्या')}
+                </button>
+                <button
+                  onClick={() => handleSelectNeighborhood({ loc: null, label: { en: 'All India' } })}
+                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs rounded-md border border-zinc-600 transition-all"
+                >
+                  {t('View All India News', 'இந்தியா செய்திகள்', 'अखिल भारत समाचार देखें', 'అఖిల భారత వార్తలు', 'ভারত খবর', 'अखिल भारतीय बातम्या')}
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           filteredNews.map((item, idx) => {
